@@ -10,7 +10,7 @@ Banish is a declarative DSL for building rule-driven state machines in Rust. It 
 - Zero Runtime Overhead: Banish is a procedural macro. It generates standard, optimized Rust code at compile time. There is no interpreter or virtual machine.
 - Mix Standard Rust: The body of every rule is just standard Rust code. You don't have to learn a whole new language, just a new structure.
 - Organization: Writing complex state machines in raw Rust often leads to "spaghetti code" full of nested if/else, loop, and match blocks. Banish provides a clean, readable syntax to organize this logic.
-- Self-Documentiing: Banish structures your code into named Phases and Rules. This lets your code be instantly understandable to other developers (or yourself six months later) without too much additional commenting.
+- Self-Documenting: Banish structures your code into named Phases and Rules. This lets your code be instantly understandable to other developers (or yourself six months later) without too much additional commenting.
 
 ## Features
 - @States: Group logic into distinct states (e.g., @init, @process, @report).
