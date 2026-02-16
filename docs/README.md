@@ -9,6 +9,7 @@ Given Banish's small size, this guide will be realatively short, but feel free t
 - **rule ? {}** : A rule without a condition. Executes exactly once per state entry. Cannot have an else clause.
 - **=> @state;** : Transitions immediately to another state, but is a rule top-level statement only.
 - **return value;** : Immediately exit banish and return a value if passed.
+- **break;** : Immediately breaks out of a state.
 
 ## Examples
 ### Hello World
@@ -128,6 +129,7 @@ fn main() {
     println!("GAME OVER: {}", result)
 }
 ```
+
 ### Find Index
 This example demos a more practical example of how to use Banish.
 ```rust
@@ -158,6 +160,33 @@ fn find_index(buffer: &[String], target: &str) -> Option<usize> {
                 idx += 1;
             }
             // Rule triggered so we re-evalutate rules in search.
+    }
+}
+```
+### Double For Loop
+This example demos a translation of a double for loop into a more Banish-y way. 
+Not saying this particular example is more readable, but it is interesting to see and could be useful if you have a lot of logic in each for loop.
+```rust
+use banish::banish;
+
+fn main() {
+    let mut x = 0;
+    let mut y = 0;
+    banish! {
+        // Translates to
+        // for y in 0..10 {
+        //     for x in 0..10 { println!("x: {}, y: {}", x, y); }
+        // }
+        @for_loops
+            for_x ? x != 10 {
+                x += 1;
+                println!("x: {}, y: {}", x, y);
+            } !? {
+                x = 0;
+                y += 1;
+                if y == 10 { return; }
+                => @for_loops; // Remember else clauses don't trigger loops, so we have to transition explicitly
+            }
     }
 }
 ```
