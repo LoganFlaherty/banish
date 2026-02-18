@@ -17,7 +17,7 @@ Banish is a declarative DSL for building rule-driven state machines in Rust. It 
 - Rules?: Rules that only execute when a condition is met (e.g., increment ? tick < 120).
 - Convergence Loops: If a rule is triggered, the state automatically re-evaluates to ensure consistency.
 - Automatic State Transitions: Once a state reaches a fixed point it transitions to the next state. However, the => @state syntax offers explicit transitions to any state.
-- Scope Awareness: Variables and crates declared in your outer scope are available inside the DSL, making it easy to integrate into existing projects.
+- Scope Awareness: Variables, functions, and crates declared in your outer scope are available inside the DSL, making it easy to integrate into existing projects.
 
 ## Examples
 https://github.com/LoganFlaherty/banish/blob/main/docs/README.md
