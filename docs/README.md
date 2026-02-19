@@ -151,9 +151,9 @@ fn find_index(buffer: &[String], target: &str) -> Option<usize> {
                 return None;
             }
 
-            found ? buffer[idx] == target {
-                return Some(idx);
-            } !? { idx += 1; }
+            found ? buffer[idx] != target {
+                idx += 1;
+            } !? { return Some(idx); }
             // Rule triggered so we re-evalutate rules in search.
     }
 }
