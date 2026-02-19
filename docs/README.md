@@ -146,7 +146,6 @@ fn find_index(buffer: &[String], target: &str) -> Option<usize> {
     let mut idx = 0;
     banish! {
         @search
-            // If we reached the end, give up.
             // This must be first to prevent out-of-bounds panic below.
             not_found ? idx >= buffer.len() {
                 return None;
@@ -154,11 +153,7 @@ fn find_index(buffer: &[String], target: &str) -> Option<usize> {
 
             found ? buffer[idx] == target {
                 return Some(idx);
-            }
-
-            next ? true {
-                idx += 1;
-            }
+            } !? { idx += 1; }
             // Rule triggered so we re-evalutate rules in search.
     }
 }
