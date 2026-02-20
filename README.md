@@ -30,13 +30,13 @@ fn main() {
    let mut loop_count: i32 = 0;
    banish! {
        @red
-            announce ? {
+           announce ? {
                ticks = 0;
                println!("Red light");
                loop_count += 1;
-            }
+           }
 
-            timer ? ticks < 3 {
+           timer ? ticks < 3 {
                 ticks += 1;
            }
 
