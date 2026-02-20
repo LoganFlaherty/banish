@@ -42,9 +42,9 @@ fn main() {
                ticks = 0;
                println!("Red light");
                loop_count += 1;
-            }
+           }
 
-            timer ? ticks < 3 {
+           timer ? ticks < 3 {
                 ticks += 1;
            }
 
@@ -68,9 +68,7 @@ fn main() {
 
            reset ? ticks == 10 && loop_count < 2 {
                => @red;
-           }
-
-           stop ? loop_count == 2 { return; }
+           } !? { return; }
     }
 }
 ```
