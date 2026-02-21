@@ -68,40 +68,17 @@ impl Parse for State {
 impl Parse for Rule {
     fn parse(input: ParseStream) -> Result<Self> {
         let name: Ident = input.parse()?;
+    
         input.parse::<Token![?]>()?;
-
-        let condition: Option<Expr> = if input.peek(syn::token::Brace) {
-            None
-        } else {
-            let mut cond_tokens = proc_macro2::TokenStream::new();
-            
-            // Loop until we see the start of the body block
-            while !input.peek(syn::token::Brace) {
-                if input.is_empty() {
-                    return Err(input.error("Unexpected end of input, expected rule body '{'"));
-                }
-                // Pull one token at a time (e.g., "buffer", "[", "idx", "]", "==", "target")
-                cond_tokens.extend(std::iter::once(input.parse::<TokenTree>()?));
-            }
-            
-            // Now parse those isolated tokens as an Expression.
-            // Since the '{' isn't in 'cond_tokens', syn can't mistake it for a struct!
-            Some(syn::parse2(cond_tokens)?)
-        };
+        let condition: Option<Expr> = parse_rule_condition(input)?;
 
         let content: syn::parse::ParseBuffer<'_>;
         braced!(content in input);
 
         let body: Vec<BanishStmt> = parse_rule_block(&content)?;
-        let else_body: Option<Vec<BanishStmt>> = if input.peek(Token![!]) {
-            input.parse::<Token![!]>()?;
-            input.parse::<Token![?]>()?;
+        let else_body: Option<Vec<BanishStmt>> = parse_rule_else_block(input)?;
 
-            let else_content: syn::parse::ParseBuffer<'_>;
-            braced!(else_content in input);
-            Some(parse_rule_block(&else_content)?)
-        } else { None };
-
+        // If there is an '!?' clause, there must be a condition.
         if condition.is_none() && else_body.is_some() {
             return Err(syn::Error::new(
                 name.span(),
@@ -127,65 +104,10 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         return err.to_compile_error().into();
     }
 
-    let state_blocks = input.states.iter().enumerate().map(|(index, state)| {
-        let rules = state.rules.iter().map(|func| {
-            let body = func.body.iter().map(|stmt| generate_stmt(stmt, &input));
-            let else_body = func.else_body.as_ref().map(|else_block| {
-                else_block.iter().map(|stmt| generate_stmt(stmt, &input))
-            });
+    let state_blocks = input.states.iter()
+        .enumerate().map(|(index, state)| generate_state(state, &input, index));
 
-            // If a rule has a condition, we want to run it every iteration until the condition is false.
-            if let Some(condition) = &func.condition {
-                if let Some(else_body) = else_body {
-                    quote! {
-                        if #condition {
-                            __interaction = true;
-                            #(#body)*
-                        } else {
-                            #(#else_body)*
-                        }
-                    }
-                } else {
-                    quote! {
-                        if #condition {
-                            __interaction = true;
-                            #(#body)*
-                        }
-                    }
-                }
-            }
-            // If a rule is conditionless, we want to run it only once per state.
-            else {
-                quote! {
-                    if __first_iteration {
-                        __interaction = true;
-                        #(#body)*
-                    }
-                }
-            }
-        });
-
-        // State loop
-        // If no interactions occur in a full pass, exit state
-        let index: syn::Index = syn::Index::from(index);
-        quote! {
-            #index => {
-                let mut __first_iteration = true;
-                loop {
-                    __interaction = false;
-                    #(#rules)*
-                    if __first_iteration { __first_iteration = false; }
-                    if !__interaction {
-                        break;
-                    }
-                }
-
-                __current_state += 1;
-            }
-        }
-    });
-
-    let expanded: proc_macro2::TokenStream = quote! {{
+    let expanded: proc_macro2::TokenStream = quote! {
         (move || {
             let mut __current_state: usize = 0;
             let mut __interaction: bool = false;
@@ -198,8 +120,31 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 }
             }
         })()
-    }};
+    };
+
     proc_macro::TokenStream::from(expanded)
+}
+
+
+//// Helper Functions
+
+fn parse_rule_condition(input: &syn::parse::ParseBuffer) -> Result<Option<Expr>> {
+    if input.peek(syn::token::Brace) {
+        Ok(None)
+    } else {
+        let mut cond_tokens = proc_macro2::TokenStream::new();
+        
+        // Loop until the start of the body block
+        while !input.peek(syn::token::Brace) {
+            if input.is_empty() {
+                return Err(input.error("Unexpected end of input, expected rule body '{'"));
+            }
+            // Pull one token at a time
+            cond_tokens.extend(std::iter::once(input.parse::<TokenTree>()?));
+        }
+        
+        Ok(Some(syn::parse2(cond_tokens)?))
+    }
 }
 
 fn parse_rule_block(content: &syn::parse::ParseBuffer) -> Result<Vec<BanishStmt>> {
@@ -222,22 +167,15 @@ fn parse_rule_block(content: &syn::parse::ParseBuffer) -> Result<Vec<BanishStmt>
     Ok(body)
 }
 
-fn generate_stmt(stmt: &BanishStmt, input: &Context) -> proc_macro2::TokenStream {
-    match stmt {
-        BanishStmt::Rust(stmt) => quote! { #stmt },
-        BanishStmt::StateTransition(transition) => {
-            let target: usize = input.states
-                .iter()
-                .position(|state| &state.name == transition)
-                .unwrap_or_else(|| { panic!("Error: Invalid state transition target {}", transition); });
-            
-            let target: syn::Index = syn::Index::from(target);
-            quote! {
-                __current_state = #target;
-                continue 'banish_main;
-            }
-        }
-    }
+fn parse_rule_else_block(input: &syn::parse::ParseBuffer) -> Result<Option<Vec<BanishStmt>>> {
+    if input.peek(Token![!]) {
+        input.parse::<Token![!]>()?;
+        input.parse::<Token![?]>()?;
+
+        let else_content: syn::parse::ParseBuffer<'_>;
+        braced!(else_content in input);
+        Ok(Some(parse_rule_block(&else_content)?))
+    } else { Ok(None) }
 }
 
 fn validate_state_and_rule_names(input: &Context) -> syn::Result<()> {
@@ -268,4 +206,80 @@ fn validate_state_and_rule_names(input: &Context) -> syn::Result<()> {
     }
 
     Ok(())
+}
+
+fn generate_state(state: &State, input: &Context, index: usize) -> proc_macro2::TokenStream {
+    let rules = state.rules.iter().map(|func| {
+        let body = func.body.iter().map(|stmt| generate_stmt(stmt, &input));
+        let else_body = func.else_body.as_ref().map(|else_block| {
+            else_block.iter().map(|stmt| generate_stmt(stmt, &input))
+        });
+
+        // If a rule has a condition, we want to run it every iteration until the condition is false.
+        if let Some(condition) = &func.condition {
+            if let Some(else_body) = else_body {
+                quote! {
+                    if #condition {
+                        __interaction = true;
+                        #(#body)*
+                    } else {
+                        #(#else_body)*
+                    }
+                }
+            } else {
+                quote! {
+                    if #condition {
+                        __interaction = true;
+                        #(#body)*
+                    }
+                }
+            }
+        }
+        // If a rule is conditionless, we want to run it only once per state.
+        else {
+            quote! {
+                if __first_iteration {
+                    __interaction = true;
+                    #(#body)*
+                }
+            }
+        }
+    });
+
+    // State loop
+    // If no interactions occur in a full pass, exit state
+    let index: syn::Index = syn::Index::from(index);
+    quote! {
+        #index => {
+            let mut __first_iteration = true;
+            loop {
+                __interaction = false;
+                #(#rules)*
+                if __first_iteration { __first_iteration = false; }
+                if !__interaction {
+                    break;
+                }
+            }
+
+            __current_state += 1;
+        }
+    }
+}
+
+fn generate_stmt(stmt: &BanishStmt, input: &Context) -> proc_macro2::TokenStream {
+    match stmt {
+        BanishStmt::Rust(stmt) => quote! { #stmt },
+        BanishStmt::StateTransition(transition) => {
+            let target: usize = input.states
+                .iter()
+                .position(|state| &state.name == transition)
+                .unwrap_or_else(|| { panic!("Error: Invalid state transition target {}", transition); });
+            
+            let target: syn::Index = syn::Index::from(target);
+            quote! {
+                __current_state = #target;
+                continue 'banish_main;
+            }
+        }
+    }
 }
