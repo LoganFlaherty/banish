@@ -3,7 +3,7 @@
 [![Docs.rs](https://docs.rs/banish/badge.svg)](https://docs.rs/banish)
 [![License](https://img.shields.io/crates/l/banish.svg)](https://github.com/LoganFlaherty/banish/blob/main/LICENSE)
 
-Banish is a declarative DSL for building rule-driven state machines in Rust. It allows you to define states and rules that execute until they reach a stable fixed point or trigger transitions, making complex control flow easier to express and reason about.
+Banish is a declarative DSL for building rule-based state machines in Rust. It allows you to define states and rules that execute until they reach a stable fixed point or trigger transitions, making complex control flow easier to express and reason about.
 
 ## Why Banish?
 - Fixed-Point Solving: Unlike a standard function that runs top-to-bottom once, a Banish state loops internally until no more rules trigger. This makes it perfect for layout engines, constraint solvers, or complex game logic.
@@ -19,9 +19,7 @@ Banish is a declarative DSL for building rule-driven state machines in Rust. It 
 - Automatic State Transitions: Once a state reaches a fixed point it transitions to the next state. However, the => @state syntax offers explicit transitions to any state.
 - Scope Awareness: Variables, functions, and crates declared in your outer scope are available inside the DSL, making it easy to integrate into existing projects.
 
-## Examples
-https://github.com/LoganFlaherty/banish/blob/main/docs/README.md
-
+## Example
 ```rust
 use banish::banish;
 
@@ -64,6 +62,8 @@ fn main() {
     }
 }
 ```
+
+See more examples here: https://github.com/LoganFlaherty/banish/blob/main/docs/README.md
 
 ## Install
 ### Cargo
