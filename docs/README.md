@@ -37,40 +37,38 @@ fn main() {
    let mut ticks: i32 = 0;
    let mut loop_count: i32 = 0;
    banish! {
-       @red
-           announce ? {
+        @red
+            announce ? {
                ticks = 0;
                println!("Red light");
             }
 
-           timer ? ticks < 3 {
+            timer ? ticks < 3 {
                 ticks += 1;
             }
 
-       @green
-           announce ? {
+        @green
+            announce ? {
                println!("Green light");
             }
 
-           timer ? ticks < 6 {
+            timer ? ticks < 6 {
                ticks += 1;
             }
 
-       @yellow
-           announce ? {
+        @yellow
+            announce ? {
                println!("Yellow light");
             }
 
-           timer ? ticks < 10 {
-               ticks += 1;
+            timer ? ticks < 10 {
+                ticks += 1;
+            } !? {
+                loop_count += 1;
+                => @red;
             }
 
-           end ? loop_count == 1 { return; }
-
-           reset ? ticks == 10 {
-               loop_count += 1;
-               => @red;
-            }
+            end ? loop_count == 1 { return; }
     }
 }
 ```
