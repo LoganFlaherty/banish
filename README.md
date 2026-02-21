@@ -33,34 +33,36 @@ fn main() {
            announce ? {
                ticks = 0;
                println!("Red light");
-               loop_count += 1;
-           }
+            }
 
            timer ? ticks < 3 {
                 ticks += 1;
-           }
+            }
 
        @green
            announce ? {
                println!("Green light");
-           }
+            }
 
            timer ? ticks < 6 {
                ticks += 1;
-           }
+            }
 
        @yellow
            announce ? {
                println!("Yellow light");
-           }
+            }
 
            timer ? ticks < 10 {
                ticks += 1;
-           }
+            }
 
-           reset ? ticks == 10 && loop_count < 2 {
+           end ? loop_count == 1 { return; }
+
+           reset ? ticks == 10 {
+               loop_count += 1;
                => @red;
-           } !? { return; }
+            }
     }
 }
 ```
