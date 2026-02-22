@@ -1,6 +1,6 @@
 ## Introduction
 As stated before Banish is an excellent DSL to write state-machines or have easy to read conditional logic. 
-Given Banish's small size, this guide will be realatively short, but feel free to post in Discussions if you have any input or questions.
+Given Banish's small size, this guide will be relatively short, but feel free to post in Discussions if you have any input or questions.
 
 ## Syntax
 - **@state** : Defines a state that loops until no rules trigger or a state transition. States execute from top to bottom.
@@ -29,7 +29,7 @@ fn main() {
 ```
 
 ### Traffic Lights
-This demostration is a basic example to show off the transitions of phases and how to think about control flow in Banish.
+This demostration is a basic example to show off the transitions of states and how to think about control flow in Banish.
 ```rust
 use banish::banish;
 
