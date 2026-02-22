@@ -3,14 +3,14 @@
 [![Docs.rs](https://docs.rs/banish/badge.svg)](https://docs.rs/banish)
 [![License](https://img.shields.io/crates/l/banish.svg)](https://github.com/LoganFlaherty/banish/blob/main/LICENSE)
 
-Banish is a declarative DSL for building rule-based state machines in Rust. It allows you to define states and rules that execute until they reach a stable fixed point or trigger transitions, making complex control flow easier to express and reason about.
+Banish is a declarative DSL for building rule-based state machines in Rust. It allows you to define states and rules that execute until they reach a fixed point or trigger transitions, making complex control flow easier to express and reason about.
 
 ## Why Banish?
 - Fixed-Point Solving: Unlike a standard function that runs top-to-bottom once, a Banish state loops internally until no more rules trigger. This makes it perfect for layout engines, constraint solvers, or complex game logic.
 - Zero Runtime Overhead: Banish is a procedural macro. It generates standard, optimized Rust code at compile time. There is no interpreter or virtual machine.
 - Mix Standard Rust: The body of every rule is just standard Rust code. You don't have to learn a whole new language, just a new structure.
 - Organization: Writing complex state machines in raw Rust often leads to "spaghetti code" full of nested if/else, loop, and match blocks. Banish provides a clean, readable syntax to organize this logic.
-- Self-Documenting: Banish structures your code into named Phases and Rules. This lets your code be instantly understandable to other developers (or yourself six months later) without too much additional commenting.
+- Self-Documenting: Banish structures your code into named States and Rules. This lets your code be instantly understandable to other developers (or yourself six months later) without too much additional commenting.
 
 ## Features
 - @States: Group logic into distinct states (e.g., @init, @process, @report).
