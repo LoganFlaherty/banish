@@ -1,15 +1,15 @@
 ## Introduction
-As stated before Banish is an excellent DSL to write state-machines or have easy to read conditional logic. 
+As implies, Banish is a solid DSL to write state-machines or have easy to read conditional logic. 
 Given Banish's small size, this guide will be relatively short, but feel free to post in Discussions if you have any input or questions.
 
 ## Syntax
-- **@state** : Defines a state that loops until no rules trigger or a state transition. States execute from top to bottom.
+- **@state** : Defines a state. A state re-evaluates until no rule triggers or a transition occurs.
 - **rule ? condition {}** : Defines a rule. Executes if its condition is true. Rules execute from top to bottom.
-- **!? {}** : Defines an else clause after the closing brace of a rule with a condition. Does not retrigger the state.
-- **rule ? {}** : A rule without a condition. Executes exactly once per state entry. Cannot have an else clause.
-- **=> @state;** : Transitions immediately to another state, but is a rule top-level statement only.
-- **return value;** : Immediately exit banish and return a value if passed.
-- **break;** : Immediately breaks out of a state.
+- **!? {}** : Defines a fallback branch. Executes when the rule's condition is false.
+- **rule ? {}** : A rule without a condition. Executes exactly once per state entry. Cannot have a fallback branch.
+- **=> @state;** : Explicit transition. Immediately transfers to another state. Valid only at the top level of a rule body.
+- **return value;** : Immediately exit banish! and return a value if provided.
+- **break;** : Immediately exits out of the state.
 
 ## Examples
 ### Hello World
@@ -74,7 +74,7 @@ fn main() {
 ```
 
 ### Dragon Fight
-This example demostrates a little bit more complex logic such as early returning with a value to be used later, using an external library within Banish, and else clauses.
+This example demostrates a little bit more complex logic such as early returning with a value to be used later, using an external library within Banish, and fallback branches.
 ```rust
 use banish::banish;
 use rand::prelude::*;
