@@ -77,7 +77,7 @@ A rule fires when `condition` evaluates to `true`. The condition is any Rust exp
 ```rust
 @process
     clamp ? value > 100 { value = 100; }
-    log   ? ready       { println!("{}", value); ready = false; }
+    log ? ready { println!("{}", value); ready = false; }
 ```
 
 ### Conditionless Rules
@@ -167,8 +167,8 @@ fn find(buffer: &[String], target: &str) -> Option<usize> {
     banish! {
         @search
             not_found ? idx >= buffer.len() { return None; }
-            found     ? buffer[idx] == target { return Some(idx); }
-            advance   ? { idx += 1; }
+            found ? buffer[idx] == target { return Some(idx); }
+            advance ? { idx += 1; }
     }
 }
 ```
@@ -196,7 +196,7 @@ Removes the state from implicit scheduling. An isolated state is never entered b
 ```rust
 banish! {
     @main
-        trigger? condition {
+        trigger ? condition {
             => @handler;
         }
         done? { return; }
@@ -236,7 +236,7 @@ Same as `max_iter = N`, but instead of advancing normally on exhaustion, the mac
 ```rust
 #[max_iter = 3 => @timeout]
 @retry
-    attempt? !succeeded { try_request(); }
+    attempt ? !succeeded { try_request(); }
 
 #[isolate]
 @timeout
