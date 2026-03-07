@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-banish = "1.1.5"
+banish = "1.2.0"
 rand =  "0.10.0"
