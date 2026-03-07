@@ -1,6 +1,6 @@
 use proc_macro2::TokenTree;
 use syn::{
-    Expr, Ident, Result, Stmt, Token, braced,
+    Expr, Ident, LitInt, Result, Stmt, Token, braced, bracketed,
     parse::{Parse, ParseStream},
 };
 
@@ -12,7 +12,40 @@ pub struct Context {
 
 pub struct State {
     pub name: Ident,
+    pub attrs: StateAttrs,
     pub rules: Vec<Rule>,
+}
+
+/// Parsed attributes that can be placed on a state with `#[...]`.
+///
+/// # Supported attributes
+/// 
+/// * `isolate` — The state is removed from implicit sequential scheduling.
+///   It can only be entered via an explicit `=> @state_name` transition.
+///   Isolated states are excluded from the "final state must return" check.
+///
+/// * `max_iter = N` — Caps the internal fixed-point loop to N iterations.
+///   If the loop has not converged by then, the state exits normally (advances
+///   to the next non-isolated state). An optional redirect target can be specified
+///   with `max_iter = N => @state`, which transitions to `@state` on exhaustion
+///   instead of falling through to the scheduler.
+///
+/// * `max_entry = N` — Limits the number of times this state may be entered
+///   across the lifetime of the machine. On the (N+1)th entry, the state
+///   immediately executes a `return` without evaluating any rules.
+///
+/// * `trace` — Emits `eprintln!` diagnostics on `stderr` when the state is
+///   entered and before/after each rule is evaluated, showing whether the rule
+///   condition fired.
+///
+/// Attributes can be combined freely: `#[isolate, max_iter = 5, trace]`
+#[derive(Default)]
+pub struct StateAttrs {
+    pub isolate: bool,
+    /// `(iteration_cap, optional_state_transition_on_exhaustion)`
+    pub max_iter: Option<(usize, Option<Ident>)>,
+    pub max_entry: Option<usize>,
+    pub trace: bool,
 }
 
 pub struct Rule {
@@ -33,9 +66,7 @@ pub enum BanishStmt {
 impl Parse for Context {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut states: Vec<State> = Vec::with_capacity(2);
-        while !input.is_empty() {
-            states.push(input.parse()?);
-        }
+        while !input.is_empty() { states.push(input.parse()?); }
 
         Ok(Context { states })
     }
@@ -43,15 +74,30 @@ impl Parse for Context {
 
 impl Parse for State {
     fn parse(input: ParseStream) -> Result<Self> {
+        // Parse optional attribute block: #[attr, key = val, ...]
+        let attrs: StateAttrs = if input.peek(Token![#]) {
+            input.parse::<Token![#]>()?;
+            let content: syn::parse::ParseBuffer<'_>;
+            bracketed!(content in input);
+            parse_state_attrs(&content)?
+        } else { StateAttrs::default() };
+
+        // Reject a second attribute block on the same state.
+        if input.peek(Token![#]) {
+            return Err(input.error("A state may only have one attribute block `#[...]`"));
+        }
+
+        // Parse state name
         input.parse::<Token![@]>()?;
         let name: Ident = input.parse()?;
 
+        // Parse rules until the next state (or its attribute block) or end of input
         let mut rules: Vec<Rule> = Vec::with_capacity(1);
-        while !input.is_empty() && !input.peek(Token![@]) {
+        while !input.is_empty() && !input.peek(Token![@]) && !input.peek(Token![#]) {
             rules.push(input.parse()?);
         }
 
-        Ok(State { name, rules })
+        Ok(State { name, attrs, rules })
     }
 }
 
@@ -86,10 +132,91 @@ impl Parse for Rule {
 
 //// Helper Functions
 
+/// Parse the comma-separated list of attributes inside `#[...]`.
+fn parse_state_attrs(content: &syn::parse::ParseBuffer) -> Result<StateAttrs> {
+    let mut attrs = StateAttrs::default();
+
+    while !content.is_empty() {
+        let key: Ident = content.parse()?;
+        match key.to_string().as_str() {
+            "isolate" => {
+                if attrs.isolate {
+                    return Err(syn::Error::new(key.span(), "Duplicate attribute `isolate`"));
+                }
+                attrs.isolate = true;
+            }
+            "trace" => {
+                if attrs.trace {
+                    return Err(syn::Error::new(key.span(), "Duplicate attribute `trace`"));
+                }
+                attrs.trace = true;
+            }
+            "max_iter" => {
+                if attrs.max_iter.is_some() {
+                    return Err(syn::Error::new(key.span(), "Duplicate attribute `max_iter`"));
+                }
+                content.parse::<Token![=]>()?;
+                let lit: LitInt = content.parse()?;
+                let val: usize = lit.base10_parse::<usize>().map_err(|_| {
+                    syn::Error::new(lit.span(), "`max_iter` value must be a positive integer")
+                })?;
+                if val == 0 {
+                    return Err(syn::Error::new(
+                        lit.span(),
+                        "`max_iter` value must be greater than zero",
+                    ));
+                }
+                // Optional redirect: `max_iter = N => @state`
+                let redirect: Option<Ident> = if content.peek(Token![=>]) {
+                    content.parse::<Token![=>]>()?;
+                    content.parse::<Token![@]>()?;
+                    Some(content.parse::<Ident>()?)
+                } else { None };
+                attrs.max_iter = Some((val, redirect));
+            }
+            "max_entry" => {
+                if attrs.max_entry.is_some() {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "Duplicate attribute `max_entry`",
+                    ));
+                }
+                content.parse::<Token![=]>()?;
+                let lit: LitInt = content.parse()?;
+                let val: usize = lit.base10_parse::<usize>().map_err(|_| {
+                    syn::Error::new(lit.span(), "`max_entry` value must be a positive integer")
+                })?;
+                if val == 0 {
+                    return Err(syn::Error::new(
+                        lit.span(),
+                        "`max_entry` value must be greater than zero",
+                    ));
+                }
+                attrs.max_entry = Some(val);
+            }
+            other => {
+                return Err(syn::Error::new(
+                    key.span(),
+                    format!(
+                        "Unknown state attribute `{other}`. \
+                         Expected attribute(s): `isolate`, `max_iter`, `max_entry`, `trace`"
+                    ),
+                ));
+            }
+        }
+
+        // Consume optional trailing comma between attributes.
+        if !content.is_empty() {
+            content.parse::<Token![,]>()?;
+        }
+    }
+
+    Ok(attrs)
+}
+
 fn parse_rule_condition(input: &syn::parse::ParseBuffer) -> Result<Option<Expr>> {
-    if input.peek(syn::token::Brace) {
-        Ok(None)
-    } else {
+    if input.peek(syn::token::Brace) { Ok(None) }
+    else {
         let mut cond_tokens = proc_macro2::TokenStream::new();
         
         // Loop until the start of the body block
@@ -115,8 +242,7 @@ fn parse_rule_block(content: &syn::parse::ParseBuffer) -> Result<Vec<BanishStmt>
             let state: Ident = content.parse()?;
             content.parse::<Token![;]>()?;
             body.push(BanishStmt::StateTransition(state));
-        }
-        else {
+        } else {
             let stmt: Stmt = content.parse()?;
             body.push(BanishStmt::Rust(stmt));
         }
