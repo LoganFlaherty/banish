@@ -1,33 +1,53 @@
 //! # Banish
-//! Banish is a declarative DSL for building rule-based state machines in Rust. 
-//! States evaluate their rules until reaching a fixed point or triggering a transition, reducing control flow boilerplate.
+//! Banish is a declarative DSL for building rule-based state machines in Rust.
+//! States evaluate their rules until reaching a fixed point or triggering a transition,
+//! reducing control flow boilerplate.
+//!
+//! ## How It Works
+//! A `banish!` block contains one or more states. The machine starts at the first declared
+//! state and advances through them in declaration order. Within each state, rules are
+//! evaluated top to bottom on every pass. If any rule fires, the state loops and re-evaluates
+//! from the top. Once a full pass completes with no rules firing, the state has reached its
+//! fixed point and the machine advances to the next state.
 //!
 //! ## Syntax
-//! - **@state** : Defines a state. A state re-evaluates until no rule triggers or a transition occurs.
-//! - **rule ? condition {}** : Defines a rule. Executes if its condition is true. Rules execute from top to bottom.
-//! - **!? {}** : Defines a fallback branch. Executes when the rule's condition is false.
-//! - **rule ? {}** : A rule without a condition. Executes exactly once per state entry. Cannot have a fallback branch.
-//! - **=> @state;** : Explicit transition. Immediately transfers to another state. Valid only at the top level of a rule body.
-//! - **return value;** : Immediately exit banish! and return a value if provided.
-//! - **break;** : Immediately exits out of the state.
 //!
-//! ## Examples
-//! https://github.com/LoganFlaherty/banish/blob/main/docs/README.md
+//! | Syntax | Description |
+//! |---|---|
+//! | `@name` | Declares a state. |
+//! | `rule ? condition { }` | A conditional rule. Fires when `condition` is true, then re-evaluates the state. |
+//! | `rule ? { }` | A conditionless rule. Fires exactly once on the first pass of each state entry. |
+//! | `!? { }` | Fallback branch. Runs when the preceding rule's condition is false. |
+//! | `=> @state;` | Explicit transition. Immediately jumps to another state, bypassing the scheduler. |
+//! | `return expr;` | Exits the entire `banish!` block with a value. |
+//!
+//! ## State Attributes
+//! Attributes can be placed above a state declaration to modify its behavior.
+//!
+//! | Attribute | Description |
+//! |---|---|
+//! | `isolate` | Removes the state from implicit scheduling. Only reachable via `=> @state`. |
+//! | `max_iter = N` | Caps the fixed-point loop to N iterations, then advances normally. |
+//! | `max_iter = N => @state` | Same, but transitions to `@state` on exhaustion instead of advancing. |
+//! | `max_entry = N` | Limits how many times this state can be entered. Returns on the (N+1)th entry. |
+//! | `trace` | Prints state entry and rule evaluation to stderr. Useful for debugging. |
+//!
+//! ## Example
+//! A traffic light that cycles through red, green, and yellow twice before exiting.
 //!
 //! ```rust
 //! use banish::banish;
 //!
 //! fn main() {
 //!     let mut ticks: i32 = 0;
-//!     let mut loop_count: i32 = 0;
 //!     banish! {
+//!         // Returns on the third entry immediately
+//!         #[max_entry = 2]
 //!         @red
 //!             announce ? {
 //!                 ticks = 0;
 //!                 println!("Red light");
-//!                 loop_count += 1;
-//!              }
-//!
+//!             }
 //!             timer ? ticks < 3 {
 //!                 ticks += 1;
 //!             }
@@ -36,7 +56,6 @@
 //!             announce ? {
 //!                 println!("Green light");
 //!             }
-//!
 //!             timer ? ticks < 6 {
 //!                 ticks += 1;
 //!             }
@@ -45,16 +64,15 @@
 //!             announce ? {
 //!                 println!("Yellow light");
 //!             }
-//!
 //!             timer ? ticks < 10 {
 //!                 ticks += 1;
-//!             } !? {
-//!                 loop_count += 1;
-//!                 => @red;
-//!             }
-//!
-//!             end ? loop_count = 1 { return; }
+//!             } !? { => @red; }
+//!     }
 //! }
 //! ```
+//!
+//! ## More Examples
+//! See the [examples documentation](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md)
+//! for more examples including game logic, search algorithms, and data pipelines.
 
 pub use banish_derive::banish;
