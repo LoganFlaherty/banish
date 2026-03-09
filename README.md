@@ -134,13 +134,41 @@ Attributes go above a state declaration and modify its behavior.
 | `max_iter = N` | Caps the fixed-point loop to N iterations, then advances normally. |
 | `max_iter = N => @state` | Same, but transitions to `@state` on exhaustion instead of advancing. |
 | `max_entry = N` | Limits how many times this state can be entered. Returns on the (N+1)th entry. |
-| `trace` | Prints state entry and rule evaluation to stderr. Useful for debugging. |
+| `trace` | Emits diagnostics via `log::trace!` on state entry and before each rule evaluation. Requires a `log`-compatible backend (see below). |
+
+## Tracing
+
+The `trace` attribute emits diagnostics through the [`log`](https://docs.rs/log) facade, giving you full control over where the output goes. `env_logger` is the simplest backend:
+
+```toml
+[dependencies]
+env_logger = "0.11.9"
+```
+
+```rust
+fn main() {
+    env_logger::init();
+    // ...
+}
+```
+
+Then run with `RUST_LOG=trace` to capture output:
+
+```powershell
+# PowerShell
+$env:RUST_LOG="trace"; cargo run -q 2> trace.log
+```
+
+```bash
+# bash / zsh
+RUST_LOG=trace cargo run -q 2> trace.log
+```
 
 ## Install
 
 ```toml
 [dependencies]
-banish = "1.2.0"
+banish = "1.2.1"
 ```
 
 Or with cargo:
@@ -151,16 +179,17 @@ cargo add banish
 
 ## More Examples
 
-See [`docs/README.md`](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md) for more examples including game logic, search algorithms, and data pipelines.
+See [`docs/README.md`](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md) for more examples.
 
 ## Contributing
 
 Contributions are welcome. Before opening a PR, please open a discussion first. This keeps design decisions visible and avoids duplicated effort.
 
-The test suite covers all documented behavior and edge cases. Run it locally before submitting:
+The test suite, in testing, covers all documented behavior and edge cases. Run it locally before submitting:
 
 ```
 cargo test
 ```
 
+Make sure to hook your local version of banish to the toml.
 New behavior and edge cases should include corresponding tests.
