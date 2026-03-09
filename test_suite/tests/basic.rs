@@ -30,3 +30,27 @@ fn test_hello_world_with_max_iter_transition_completes() {
             }
     }
 }
+
+/// Redirect fires on the (N+1)th entry, not the Nth.
+/// Redirect target receives control and can itself transition further.
+/// Verifies the redirect integrates correctly with the state scheduler.
+#[test]
+fn max_entry_can_state_transition() {
+    let mut stage: u32 = 0;
+    stage = banish! {
+        #[max_entry = 2 => @middle]
+        @start
+            work? { stage += 1; }
+            next? { => @start; }
+
+        #[isolate]
+        @middle
+            advance? { stage += 10; => @end; }
+
+        @end
+            finish? { return stage; }
+    };
+
+    // @start runs twice (stage = 2), then @middle adds 10 (stage = 12)
+    assert_eq!(stage, 12);
+}

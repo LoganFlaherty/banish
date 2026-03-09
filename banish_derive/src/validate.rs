@@ -56,6 +56,10 @@ pub fn validate_transition_targets(input: &Context) -> syn::Result<()> {
         if let Some((_, Some(redirect))) = &state.attrs.max_iter {
             check(redirect)?;
         }
+        // Check max_entry redirect target, if present.
+        if let Some((_, Some(redirect))) = &state.attrs.max_entry {
+            check(redirect)?;
+        }
 
         // Check all => @state transitions in rule bodies and else-bodies.
         for rule in &state.rules {
@@ -109,21 +113,24 @@ pub fn validate_final_state_has_exit(input: &Context) -> syn::Result<()> {
 /// Validates isolated state constraints:
 ///
 /// * Every isolated state must have a defined exit — either a `return` or
-///   `=> @state` in its rules, or a `max_iter = N => @state` redirect.
+///   `=> @state` in its rules, a `max_iter = N => @state` redirect, or a
+///   `max_entry = N => @state` redirect.
 ///   Without one, the state has no way to terminate.
 ///
-/// * `max_entry` is meaningless on an isolated state since the scheduler never
-///   re-enters it implicitly — only explicit transitions do, and those are
-///   unbounded by design.
+/// * `max_entry` without a redirect is meaningless on an isolated state since
+///   the scheduler never re-enters it implicitly — only explicit transitions do,
+///   and those are unbounded by design. `max_entry = N => @state` is permitted
+///   because it provides a defined exit path.
 pub fn validate_isolated_states(input: &Context) -> syn::Result<()> {
     for state in input.states.iter().filter(|s: &&crate::parse_ast::State| s.attrs.isolate) {
 
-        if state.attrs.max_entry.is_some() {
+        if matches!(&state.attrs.max_entry, Some((_, None))) {
             return Err(syn::Error::new(
                 state.name.span(),
                 format!(
-                    "Isolated state '{}' cannot use `max_entry`. Isolated states are only \
-                     entered via explicit transitions, not the scheduler",
+                    "Isolated state '{}' cannot use `max_entry` without a redirect. Isolated \
+                     states are only entered via explicit transitions, not the scheduler. \
+                     Use `max_entry = N => @state` to redirect on exhaustion instead",
                     state.name
                 ),
             ));
@@ -141,13 +148,14 @@ pub fn validate_isolated_states(input: &Context) -> syn::Result<()> {
         });
 
         let has_max_iter_redirect: bool = matches!(&state.attrs.max_iter, Some((_, Some(_))));
+        let has_max_entry_redirect: bool = matches!(&state.attrs.max_entry, Some((_, Some(_))));
 
-        if !has_exit_in_rules && !has_max_iter_redirect {
+        if !has_exit_in_rules && !has_max_iter_redirect && !has_max_entry_redirect {
             return Err(syn::Error::new(
                 state.name.span(),
                 format!(
                     "Isolated state '{}' has no exit. Add a `return`, `=> @state` transition, \
-                     or `max_iter = N => @state` redirect",
+                     `max_iter = N => @state` redirect, or `max_entry = N => @state` redirect",
                     state.name
                 ),
             ));

@@ -134,6 +134,7 @@ Attributes go above a state declaration and modify its behavior.
 | `max_iter = N` | Caps the fixed-point loop to N iterations, then advances normally. |
 | `max_iter = N => @state` | Same, but transitions to `@state` on exhaustion instead of advancing. |
 | `max_entry = N` | Limits how many times this state can be entered. Returns on the (N+1)th entry. |
+| `max_entry = N => @state` | Same, but transitions to `@state` on exhaustion instead of returning. |
 | `trace` | Emits diagnostics via `log::trace!` on state entry and before each rule evaluation. Requires a `log`-compatible backend (see below). |
 
 ## Tracing
@@ -168,7 +169,7 @@ RUST_LOG=trace cargo run -q 2> trace.log
 
 ```toml
 [dependencies]
-banish = "1.2.1"
+banish = "1.2.2"
 ```
 
 Or with cargo:
@@ -185,7 +186,7 @@ See [`docs/README.md`](https://github.com/LoganFlaherty/banish/blob/main/docs/RE
 
 Contributions are welcome. Before opening a PR, please open a discussion first. This keeps design decisions visible and avoids duplicated effort.
 
-The test suite, in testing, covers all documented behavior and edge cases. Run it locally before submitting:
+The test suite covers all documented behavior and edge cases. Run it locally before submitting:
 
 ```
 cargo test
