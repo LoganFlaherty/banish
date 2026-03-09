@@ -182,7 +182,7 @@ RUST_LOG=trace cargo run -q 2> trace.log
 
 ## More Examples
 
-The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md#dragon-fight) example demonstrates early return with a value, multi-state transitions, and external crate usage. The [Double For Loop](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md#double-for-loop) example shows self-transitions and returning a tuple.
+The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#dragon-fight) example demonstrates early return with a value, multi-state transitions, and external crate usage. The [Double For Loop](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#double-for-loop) example shows self-transitions and returning a tuple.
 
 For a full treatment of every feature, attribute, and error, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 
@@ -195,5 +195,6 @@ The test suite covers all documented behavior and edge cases. Run it locally bef
 ```
 cargo test
 ```
+
 
 New behavior and edge cases should include corresponding tests.
