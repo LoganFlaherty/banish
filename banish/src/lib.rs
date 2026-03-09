@@ -20,6 +20,8 @@
 //! | `!? { }` | Fallback branch. Runs when the preceding rule's condition is false. |
 //! | `=> @state;` | Explicit transition. Immediately jumps to another state, bypassing the scheduler. |
 //! | `return expr;` | Exits the entire `banish!` block with a value. |
+//! | `break;` | Exits the current state's loop immediately, letting the scheduler advance normally. |
+//! | `continue;` | Restarts rule evaluation from the top of the current state immediately. |
 //!
 //! ## State Attributes
 //! Attributes can be placed above a state declaration to modify its behavior.
@@ -30,6 +32,7 @@
 //! | `max_iter = N` | Caps the fixed-point loop to N iterations, then advances normally. |
 //! | `max_iter = N => @state` | Same, but transitions to `@state` on exhaustion instead of advancing. |
 //! | `max_entry = N` | Limits how many times this state can be entered. Returns on the (N+1)th entry. |
+//! | `max_entry = N => @state` | Same, but transitions to `@state` on exhaustion instead of returning. |
 //! | `trace` | Emits diagnostics via [`log::trace!`] on state entry and rule evaluation. Requires a `log`-compatible backend. |
 //!
 //! ## Tracing
@@ -70,7 +73,7 @@
 //!         // Returns on the third entry immediately
 //!         #[max_entry = 2]
 //!         @red
-//!             announce ? {
+//!             announce? {
 //!                 ticks = 0;
 //!                 println!("Red light");
 //!             }
@@ -79,7 +82,7 @@
 //!             }
 //!
 //!         @green
-//!             announce ? {
+//!             announce? {
 //!                 println!("Green light");
 //!             }
 //!             timer ? ticks < 6 {
@@ -87,7 +90,7 @@
 //!             }
 //!
 //!         @yellow
-//!             announce ? {
+//!             announce? {
 //!                 println!("Yellow light");
 //!             }
 //!             timer ? ticks < 10 {
@@ -98,8 +101,14 @@
 //! ```
 //!
 //! ## More Examples
-//! See the [examples documentation](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md)
-//! for more examples.
+//! 
+//! The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md#dragon-fight) 
+//! example demonstrates early return with a value, multi-state transitions, and external crate usage. 
+//! The [Double For Loop](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md#double-for-loop) 
+//! example shows self-transitions and returning a tuple.
+//! 
+//! For a full treatment of every feature, attribute, and error, see the 
+//! [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 
 pub use banish_derive::banish;
 pub use log;
