@@ -42,7 +42,7 @@ fn main() {
 
 ```toml
 [dependencies]
-banish = "1.2.2"
+banish = "1.2.3"
 ```
 
 Or with cargo:
@@ -195,6 +195,5 @@ The test suite covers all documented behavior and edge cases. Run it locally bef
 ```
 cargo test
 ```
-
 
 New behavior and edge cases should include corresponding tests.
