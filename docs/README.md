@@ -266,7 +266,7 @@ In the traffic light example above, the machine exits after `@red` is entered a 
 
 ### `trace`
 
-Emits `eprintln!` diagnostics to stderr at runtime. Logs state entry and the result of each conditional rule evaluation.
+Emits diagnostics via [`log::trace!`](https://docs.rs/log) on state entry and before each rule evaluation. Requires a `log`-compatible backend to capture output — without one, diagnostics are silently discarded.
 
 ```rust
 #[trace]
@@ -277,12 +277,36 @@ Emits `eprintln!` diagnostics to stderr at runtime. Logs state entry and the res
 
 Output format:
 ```
-[banish: trace] entering state compute
-[banish: trace] rule step_a: condition = true
-[banish: trace] rule step_b: condition = false
+[banish] entering state `compute`
+[banish] rule `step_a`: condition = true
+[banish] rule `step_b`: condition = false
 ```
 
-Intended for debugging during development. Has no effect on generated code structure beyond the added `eprintln!` calls.
+[`env_logger`](https://docs.rs/env_logger) is the simplest backend. Add it to your `Cargo.toml`:
+
+```toml
+[dependencies]
+env_logger = "0.11.9"
+```
+
+Initialize it at startup and run with `RUST_LOG=trace`:
+
+```rust
+fn main() {
+    env_logger::init();
+    // ...
+}
+```
+
+```bash
+# bash / zsh
+RUST_LOG=trace cargo run -q 2> trace.log
+
+# PowerShell
+$env:RUST_LOG="trace"; cargo run -q 2> trace.log
+```
+
+`log` itself is re-exported from `banish` and does not need to be added as a separate dependency.
 
 ---
 
@@ -473,7 +497,7 @@ Banish validates the macro input at compile time and produces span-accurate erro
 **Transitions are statement-level only.** `=> @state` must appear as a standalone statement inside a rule body or fallback branch. It cannot be used inside a nested block, closure, or `if` expression within a rule body. Use a top-level conditional rule instead.
 
 ```rust
-// Eoes not work
+// Does not work
 step? { if condition { => @other; } }
 
 // Works
