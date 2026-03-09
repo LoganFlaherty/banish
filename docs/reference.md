@@ -103,7 +103,7 @@ A conditionless rule fires exactly once per state entry, on the first pass only.
 name ? condition { body } !? { else_body }
 ```
 
-A fallback branch runs when the rule's condition is `false`. Unlike the rule body, a fallback branch does **not** set `__interaction = true` — it does not trigger a re-evaluation pass on its own. If you need to loop after a fallback, use an explicit `=> @state` transition.
+A fallback branch runs when the rule's condition is `false`. Unlike the rule body, a fallback branch does **not** set `__interaction = true`. It does not trigger a re-evaluation pass on its own. If you need to loop after a fallback, use an explicit `=> @state` transition.
 
 ```rust
 @check
@@ -204,7 +204,7 @@ Attributes are declared above a state and modify its runtime behavior. Multiple 
 
 ### `isolate`
 
-Removes the state from implicit scheduling. An isolated state is never entered by the scheduler — it can only be reached via an explicit `=> @state` transition.
+Removes the state from implicit scheduling. An isolated state is never entered by the scheduler. It can only be reached via an explicit `=> @state` transition.
 
 ```rust
 banish! {
@@ -223,8 +223,7 @@ banish! {
 ```
 
 **Constraints:**
-- An isolated state must have a defined exit: either a `return`, `=> @state` in its rules, or a `max_iter = N => @state` redirect. Isolated states with no exit are a compile error.
-- `max_entry` is not permitted on isolated states. Because isolated states are only entered via explicit transitions, entry count is inherently controlled by the calling state's logic.
+* An isolated state must have a defined exit: either a `return`, `=> @state` in its rules, or `max_iter = N => @state`. Isolated states with no exit are a compile error. `max_entry = N => @state` does not satisfy this requirement — it only fires on the (N+1)th entry and provides no exit for entries 1 through N.
 
 ---
 
@@ -273,7 +272,7 @@ Limits the number of times a state can be entered. On the `(N+1)`th entry the st
 
 In the traffic light example above, the machine exits after `@red` is entered a third time. The entry counter persists for the lifetime of the `banish!` block and is not reset between cycles.
 
-**Note:** Not permitted on isolated states.
+**Note:** `max_entry = N => @state` on an isolated state does not remove the requirement for a rule-level exit. The redirect only fires on the (N+1)th entry — entries 1 through N still need a `return`, `=> @state`, or `max_iter = N => @state` to exit normally.
 
 ---
 
@@ -424,7 +423,7 @@ fn main() {
 }
 ```
 
-`end_turn?` is conditionless, so it fires exactly once per state entry — after `attack?` has fired and `check_win`/`check_loss` have been evaluated. This ensures the turn always ends rather than looping indefinitely.
+`end_turn?` is conditionless, so it fires exactly once per state entry. After `attack?` has fired and `check_win`/`check_loss` have been evaluated. This ensures the turn always ends rather than looping indefinitely.
 
 ---
 
@@ -496,8 +495,7 @@ Banish validates the macro input at compile time and produces span-accurate erro
 | `Duplicate rule name 'X' in state 'Y'` | Two rules in the same state share a name. | Rename one of the rules. |
 | `Unknown state 'X'` | A `=> @state` transition or `max_iter` redirect refers to an undeclared state. | Declare the state or fix the name. |
 | `Final state 'X' must have a return or state transition` | The last non-isolated state has no exit path. | Add `return` or `=> @state` to at least one rule. |
-| `Isolated state 'X' has no exit` | An isolated state has no `return`, `=> @state`, or `max_iter = N => @state`. | Add an exit path. |
-| `Isolated state 'X' cannot use max_entry` | `max_entry` was applied to an isolated state. | Remove `max_entry`. Isolated states control re-entry via the calling state's transitions. |
+| `Isolated state 'X' has no exit` | An isolated state has no `return`, `=> @state`, or `max_iter = N => @state`. | Add an exit path. `max_entry = N => @state` alone is not sufficient. |
 | `Unknown attribute 'X'` | An unrecognised attribute was used inside `#[...]`. | Check spelling against the supported attribute list. |
 | `Duplicate attribute 'X'` | The same attribute appears more than once in `#[...]`. | Remove the duplicate. |
 | `max_iter value must be greater than zero` | `max_iter = 0` was specified. | Use a value of at least 1. |
