@@ -147,6 +147,19 @@ An explicit transition immediately jumps to the named state, bypassing the impli
 
 Transition targets must refer to a declared state name. Unknown targets are a compile error at the `=> @state` callsite.
 
+### Early Exit (`break` / `continue`)
+
+Because rule bodies are plain Rust, the native loop control keywords work as-is against the generated fixed-point loop.
+
+- `break;` exits the current state's loop immediately, skipping any remaining rules and passes, and lets the scheduler advance to the next state normally.
+- `continue;` abandons the remainder of the current pass and restarts rule evaluation from the top, equivalent to a rule firing and setting `__interaction = true` manually.
+
+```rust
+@process
+    step ? !done { do_work(); }
+    bail ? error  { break; }   // exit state early, no transition needed
+```
+
 ---
 
 ## Return Values
@@ -210,8 +223,8 @@ banish! {
 ```
 
 **Constraints:**
-- An isolated state must have a defined exit: either a `return`, `=> @state` in its rules, a `max_iter = N => @state` redirect, or a `max_entry = N => @state` redirect. Isolated states with no exit are a compile error.
-- `max_entry` without a redirect is not permitted on isolated states. Because isolated states are only entered via explicit transitions, a plain entry cap is meaningless. Use `max_entry = N => @state` if you need to redirect after a fixed number of entries.
+- An isolated state must have a defined exit: either a `return`, `=> @state` in its rules, or a `max_iter = N => @state` redirect. Isolated states with no exit are a compile error.
+- `max_entry` is not permitted on isolated states. Because isolated states are only entered via explicit transitions, entry count is inherently controlled by the calling state's logic.
 
 ---
 
@@ -260,26 +273,7 @@ Limits the number of times a state can be entered. On the `(N+1)`th entry the st
 
 In the traffic light example above, the machine exits after `@red` is entered a third time. The entry counter persists for the lifetime of the `banish!` block and is not reset between cycles.
 
-**Note:** Not permitted on isolated states without a redirect. See `max_entry = N => @state` below.
-
----
-
-### `max_entry = N => @state`
-
-Same as `max_entry = N`, but instead of returning on exhaustion, the machine transitions to the named state.
-
-```rust
-#[max_entry = 3 => @done]
-@step
-    work? { process(); }
-    next? { => @step; }
-
-#[isolate]
-@done
-    finish? { println!("max entries reached"); return; }
-```
-
-This form is permitted on isolated states because it provides a defined exit path — the redirect replaces the implicit `return`.
+**Note:** Not permitted on isolated states.
 
 ---
 
@@ -500,10 +494,10 @@ Banish validates the macro input at compile time and produces span-accurate erro
 |---|---|---|
 | `Duplicate state name 'X'` | Two states share the same name. | Rename one of the states. |
 | `Duplicate rule name 'X' in state 'Y'` | Two rules in the same state share a name. | Rename one of the rules. |
-| `Unknown state 'X'` | A `=> @state` transition, `max_iter` redirect, or `max_entry` redirect refers to an undeclared state. | Declare the state or fix the name. |
+| `Unknown state 'X'` | A `=> @state` transition or `max_iter` redirect refers to an undeclared state. | Declare the state or fix the name. |
 | `Final state 'X' must have a return or state transition` | The last non-isolated state has no exit path. | Add `return` or `=> @state` to at least one rule. |
-| `Isolated state 'X' has no exit` | An isolated state has no `return`, `=> @state`, `max_iter = N => @state`, or `max_entry = N => @state`. | Add an exit path. |
-| `Isolated state 'X' cannot use max_entry without a redirect` | Plain `max_entry` was applied to an isolated state. | Use `max_entry = N => @state` to redirect on exhaustion, or remove the attribute. |
+| `Isolated state 'X' has no exit` | An isolated state has no `return`, `=> @state`, or `max_iter = N => @state`. | Add an exit path. |
+| `Isolated state 'X' cannot use max_entry` | `max_entry` was applied to an isolated state. | Remove `max_entry`. Isolated states control re-entry via the calling state's transitions. |
 | `Unknown attribute 'X'` | An unrecognised attribute was used inside `#[...]`. | Check spelling against the supported attribute list. |
 | `Duplicate attribute 'X'` | The same attribute appears more than once in `#[...]`. | Remove the duplicate. |
 | `max_iter value must be greater than zero` | `max_iter = 0` was specified. | Use a value of at least 1. |
