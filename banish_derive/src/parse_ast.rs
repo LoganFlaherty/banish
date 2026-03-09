@@ -34,9 +34,15 @@ pub struct State {
 ///   across the lifetime of the machine. On the (N+1)th entry, the state
 ///   immediately executes a `return` without evaluating any rules.
 ///
-/// * `trace` — Emits `eprintln!` diagnostics on `stderr` when the state is
-///   entered and before/after each rule is evaluated, showing whether the rule
-///   condition fired.
+/// * `trace` — Emits [`log::trace!`] diagnostics when the state is entered and
+///   before each rule is evaluated, showing whether the rule condition fired.
+///   Requires a [`log`]-compatible backend; [`env_logger`] is the simplest option:
+///   ```rust,ignore
+///   // Run with logging enabled:
+///   // (bash / zsh) RUST_LOG=trace cargo run -q 2> trace.log
+///   // (powershell) $env:RUST_LOG="trace"; cargo run -q 2> trace.log
+///   env_logger::init();
+///   ```
 ///
 /// Attributes can be combined freely: `#[isolate, max_iter = 5, trace]`
 #[derive(Default)]
@@ -134,7 +140,7 @@ impl Parse for Rule {
 
 /// Parse the comma-separated list of attributes inside `#[...]`.
 fn parse_state_attrs(content: &syn::parse::ParseBuffer) -> Result<StateAttrs> {
-    let mut attrs = StateAttrs::default();
+    let mut attrs: StateAttrs = StateAttrs::default();
 
     while !content.is_empty() {
         let key: Ident = content.parse()?;
@@ -217,7 +223,7 @@ fn parse_state_attrs(content: &syn::parse::ParseBuffer) -> Result<StateAttrs> {
 fn parse_rule_condition(input: &syn::parse::ParseBuffer) -> Result<Option<Expr>> {
     if input.peek(syn::token::Brace) { Ok(None) }
     else {
-        let mut cond_tokens = proc_macro2::TokenStream::new();
+        let mut cond_tokens: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
         
         // Loop until the start of the body block
         while !input.peek(syn::token::Brace) {
