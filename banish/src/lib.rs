@@ -30,7 +30,33 @@
 //! | `max_iter = N` | Caps the fixed-point loop to N iterations, then advances normally. |
 //! | `max_iter = N => @state` | Same, but transitions to `@state` on exhaustion instead of advancing. |
 //! | `max_entry = N` | Limits how many times this state can be entered. Returns on the (N+1)th entry. |
-//! | `trace` | Prints state entry and rule evaluation to stderr. Useful for debugging. |
+//! | `trace` | Emits diagnostics via [`log::trace!`] on state entry and rule evaluation. Requires a `log`-compatible backend. |
+//!
+//! ## Tracing
+//! The `trace` attribute emits diagnostics through the [`log`] facade. Add a backend such as
+//! [`env_logger`](https://docs.rs/env_logger) to capture the output:
+//!
+//! ```toml
+//! [dependencies]
+//! env_logger = "0.11.9"
+//! ```
+//!
+//! ```rust,ignore
+//! fn main() {
+//!     env_logger::init();
+//!     // ...
+//! }
+//! ```
+//!
+//! Then run with `RUST_LOG=trace` to capture output:
+//!
+//! ```text
+//! # bash / zsh
+//! RUST_LOG=trace cargo run -q 2> trace.log
+//!
+//! # PowerShell
+//! $env:RUST_LOG="trace"; cargo run -q 2> trace.log
+//! ```
 //!
 //! ## Example
 //! A traffic light that cycles through red, green, and yellow twice before exiting.
@@ -73,6 +99,7 @@
 //!
 //! ## More Examples
 //! See the [examples documentation](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md)
-//! for more examples including game logic, search algorithms, and data pipelines.
+//! for more examples.
 
 pub use banish_derive::banish;
+pub use log;
