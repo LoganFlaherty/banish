@@ -48,7 +48,7 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let entry_counters: Vec<proc_macro2::TokenStream> = input.states.iter()
         .enumerate()
         .filter_map(|(i, state)| {
-            state.attrs.max_entry.map(|_| {
+            state.attrs.max_entry.as_ref().map(|_| {
                 let ident: syn::Ident = entry_counter_ident(i);
                 quote! { let mut #ident: usize = 0; }
             })

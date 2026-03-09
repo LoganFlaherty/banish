@@ -1,0 +1,3 @@
+[workspace]
+members = ["banish", "banish_derive", "test_suite"]
+resolver = "3"

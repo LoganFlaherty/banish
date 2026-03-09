@@ -40,7 +40,7 @@ pub struct State {
 ///   ```rust,ignore
 ///   // Run with logging enabled:
 ///   // (bash / zsh) RUST_LOG=trace cargo run -q 2> trace.log
-///   // (powershell) $env:RUST_LOG="trace"; cargo run -q 2> trace.log
+///   // (Powershell) $env:RUST_LOG="trace"; cargo run -q 2> trace.log
 ///   env_logger::init();
 ///   ```
 ///
@@ -50,7 +50,8 @@ pub struct StateAttrs {
     pub isolate: bool,
     /// `(iteration_cap, optional_state_transition_on_exhaustion)`
     pub max_iter: Option<(usize, Option<Ident>)>,
-    pub max_entry: Option<usize>,
+    /// `(entry_cap, optional_state_transition_on_exhaustion)`
+    pub max_entry: Option<(usize, Option<Ident>)>,
     pub trace: bool,
 }
 
@@ -198,7 +199,13 @@ fn parse_state_attrs(content: &syn::parse::ParseBuffer) -> Result<StateAttrs> {
                         "`max_entry` value must be greater than zero",
                     ));
                 }
-                attrs.max_entry = Some(val);
+                // Optional redirect: `max_entry = N => @state`
+                let redirect: Option<Ident> = if content.peek(Token![=>]) {
+                    content.parse::<Token![=>]>()?;
+                    content.parse::<Token![@]>()?;
+                    Some(content.parse::<Ident>()?)
+                } else { None };
+                attrs.max_entry = Some((val, redirect));
             }
             other => {
                 return Err(syn::Error::new(

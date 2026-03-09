@@ -140,10 +140,24 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
     };
 
     // Build the max_entry guard (runs before the loop).
-    let entry_guard: proc_macro2::TokenStream = if let Some(max) = attrs.max_entry {
+    let entry_guard: proc_macro2::TokenStream = if let Some((max, redirect)) = &attrs.max_entry {
         let counter: syn::Ident = entry_counter_ident(index);
+        let on_exhaust: proc_macro2::TokenStream = match redirect {
+            Some(target) => {
+                let target_index: usize = input.states
+                    .iter()
+                    .position(|s: &State| &s.name == target)
+                    .expect("banish: max_entry state transition not found. Should have been caught by validate_transition_targets");
+                let target_lit: syn::Index = syn::Index::from(target_index);
+                quote! {
+                    __current_state = #target_lit;
+                    continue 'banish_main;
+                }
+            }
+            None => quote! { return; },
+        };
         quote! {
-            if #counter >= #max { return; }
+            if #counter >= #max { #on_exhaust }
             #counter += 1;
         }
     } else { quote! {} };

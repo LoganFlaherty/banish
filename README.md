@@ -15,7 +15,7 @@ fn main() {
         // Returns on the third entry immediately
         #[max_entry = 2]
         @red
-            announce ? {
+            announce? {
                 ticks = 0;
                 println!("Red light");
             }
@@ -24,18 +24,31 @@ fn main() {
             }
 
         @green
-            announce ? { println!("Green light"); }
+            announce? { println!("Green light"); }
             timer ? ticks < 6 {
                 ticks += 1;
             }
 
         @yellow
-            announce ? { println!("Yellow light"); }
+            announce? { println!("Yellow light"); }
             timer ? ticks < 10 {
                 ticks += 1;
             } !? { => @red; }
     }
 }
+```
+
+## Install
+
+```toml
+[dependencies]
+banish = "1.2.2"
+```
+
+Or with cargo:
+
+```
+cargo add banish
 ```
 
 ## Why Banish?
@@ -48,61 +61,61 @@ fn main() {
 ## Comparison
 Most state machines in Rust end up as a `loop` wrapping a `match` wrapping a pile of `if` chains with careful flag management. The structure of the problem gets lost in the structure of the code. Banish flips this around. You write the *what*, not the *how*.
 
+Here's the traffic light example from above written by hand:
+
 ```rust
 // Without banish
-let mut state = 0;
-loop {
-    match state {
-        0 => {
-            let mut interaction = false;
-            if !initialized {
-                initialized = true;
-                value = compute();
-                interaction = true;
+fn main() {
+    #[derive(PartialEq)]
+    enum Light { Red, Green, Yellow }
+
+    let mut ticks: i32 = 0;
+    let mut state = Light::Red;
+    let mut red_entries: usize = 0;
+    let mut first_iteration = true;
+
+    loop {
+        match state {
+            Light::Red => {
+                if first_iteration {
+                    if red_entries >= 2 { break; }
+                    red_entries += 1;
+                    ticks = 0;
+                    println!("Red light");
+                    first_iteration = false;
+                }
+                let mut interaction = false;
+                if ticks < 3 { ticks += 1; interaction = true; }
+                if !interaction { state = Light::Green; first_iteration = true; }
             }
-            if initialized && value > threshold {
-                value = clamp(value);
-                interaction = true;
+            Light::Green => {
+                if first_iteration {
+                    println!("Green light");
+                    first_iteration = false;
+                }
+                let mut interaction = false;
+                if ticks < 6 { ticks += 1; interaction = true; }
+                if !interaction { state = Light::Yellow; first_iteration = true; }
             }
-            if initialized && value <= threshold {
-                state = 1;
-                interaction = true;
+            Light::Yellow => {
+                if first_iteration {
+                    println!("Yellow light");
+                    first_iteration = false;
+                }
+                if ticks < 10 {
+                    ticks += 1;
+                } else {
+                    state = Light::Red;
+                    first_iteration = true;
+                    continue;
+                }
             }
-            if !interaction { state = 1; }
         }
-        1 => {
-            let mut interaction = false;
-            if !logged {
-                logged = true;
-                log(value);
-                interaction = true;
-            }
-            if logged && errors.is_empty() { return Ok(value); }
-            if logged && !errors.is_empty() { return Err(errors); }
-            if !interaction { break; }
-        }
-        _ => unreachable!()
     }
 }
-
-// With banish
-@normalize
-    setup ? !initialized {
-        initialized = true;
-        value = compute();
-    }
-    clamp ? value > threshold { value = clamp(value); }
-
-@report
-    log ? !logged {
-        logged = true;
-        log(value);
-    }
-    finish ? errors.is_empty() { return Ok(value); }
-    fail ? !errors.is_empty() { return Err(errors); }
 ```
 
-The manual version has three concerns tangled together: state indexing, interaction tracking, and the actual logic. The banish version is just the logic.
+The manual version requires you to declare the enum, wire up the entry counter, carry a `first_iteration` flag across states, track `interaction` in every arm, and advance the state yourself. The banish version is just the logic.
 
 ## Concepts
 
@@ -117,6 +130,8 @@ The manual version has three concerns tangled together: state indexing, interact
 **Explicit transitions** (`=> @state;`) jump to any named state immediately, bypassing the implicit scheduler.
 
 **Return values** (`return expr;`) work naturally. Exits the entire `banish!` block with a value, just like returning from a closure.
+
+**Early exit** (`break;` / `continue;`) work natively inside rule bodies against the generated fixed-point loop. `break` exits the current state and lets the scheduler advance normally. `continue` restarts rule evaluation from the top immediately.
 
 ## State Attributes
 
@@ -134,6 +149,7 @@ Attributes go above a state declaration and modify its behavior.
 | `max_iter = N` | Caps the fixed-point loop to N iterations, then advances normally. |
 | `max_iter = N => @state` | Same, but transitions to `@state` on exhaustion instead of advancing. |
 | `max_entry = N` | Limits how many times this state can be entered. Returns on the (N+1)th entry. |
+| `max_entry = N => @state` | Same, but transitions to `@state` on exhaustion instead of returning. |
 | `trace` | Emits diagnostics via `log::trace!` on state entry and before each rule evaluation. Requires a `log`-compatible backend (see below). |
 
 ## Tracing
@@ -164,32 +180,20 @@ $env:RUST_LOG="trace"; cargo run -q 2> trace.log
 RUST_LOG=trace cargo run -q 2> trace.log
 ```
 
-## Install
-
-```toml
-[dependencies]
-banish = "1.2.1"
-```
-
-Or with cargo:
-
-```
-cargo add banish
-```
-
 ## More Examples
 
-See [`docs/README.md`](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md) for more examples.
+The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md#dragon-fight) example demonstrates early return with a value, multi-state transitions, and external crate usage. The [Double For Loop](https://github.com/LoganFlaherty/banish/blob/main/docs/README.md#double-for-loop) example shows self-transitions and returning a tuple.
+
+For a full treatment of every feature, attribute, and error, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 
 ## Contributing
 
 Contributions are welcome. Before opening a PR, please open a discussion first. This keeps design decisions visible and avoids duplicated effort.
 
-The test suite, in testing, covers all documented behavior and edge cases. Run it locally before submitting:
+The test suite covers all documented behavior and edge cases. Run it locally before submitting:
 
 ```
 cargo test
 ```
 
-Make sure to hook your local version of banish to the toml.
 New behavior and edge cases should include corresponding tests.
