@@ -1,0 +1,5 @@
+error: Unknown state `nowhere`
+ --> tests/errors/unknown_transition_target_fallback.rs:6:39
+  |
+6 |             step ? false { } !? { => @nowhere; }
+  |                                       ^^^^^^^

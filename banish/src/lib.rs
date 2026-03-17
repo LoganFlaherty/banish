@@ -77,6 +77,7 @@
 //!                 ticks = 0;
 //!                 println!("Red light");
 //!             }
+//! 
 //!             timer ? ticks < 3 {
 //!                 ticks += 1;
 //!             }
@@ -85,6 +86,7 @@
 //!             announce? {
 //!                 println!("Green light");
 //!             }
+//! 
 //!             timer ? ticks < 6 {
 //!                 ticks += 1;
 //!             }
@@ -93,6 +95,7 @@
 //!             announce? {
 //!                 println!("Yellow light");
 //!             }
+//! 
 //!             timer ? ticks < 10 {
 //!                 ticks += 1;
 //!             } !? { => @red; }

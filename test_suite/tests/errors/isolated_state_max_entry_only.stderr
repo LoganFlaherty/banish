@@ -1,0 +1,5 @@
+error: Isolated state 'handler' has no exit. Add a `return`, `=> @state` transition, or `max_iter = N => @state` redirect
+  --> tests/errors/isolated_state_max_entry_only.rs:13:10
+   |
+13 |         @handler
+   |          ^^^^^^^

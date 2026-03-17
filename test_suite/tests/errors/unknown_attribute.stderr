@@ -1,0 +1,5 @@
+error: Unknown state attribute `unknown_attr`. Expected attribute(s): `isolate`, `max_iter`, `max_entry`, `trace`
+ --> tests/errors/unknown_attribute.rs:5:11
+  |
+5 |         #[unknown_attr]
+  |           ^^^^^^^^^^^^

@@ -1,0 +1,5 @@
+error: Rule 'step' cannot have an '!?' clause without a condition.
+ --> tests/errors/conditionless_rule_with_fallback.rs:6:13
+  |
+6 |             step? { return; } !? { return; }
+  |             ^^^^

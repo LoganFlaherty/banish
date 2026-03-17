@@ -7,7 +7,7 @@ fn test_isolated_state_is_skipped_by_scheduler() {
     let visited_isolated: bool = banish! {
         @first
             setup? {
-                // intentionally empty — just needs to converge and advance
+                // intentionally empty. Just needs to converge and advance
             }
 
         #[isolate]
@@ -23,26 +23,6 @@ fn test_isolated_state_is_skipped_by_scheduler() {
     };
 
     assert!(!visited_isolated, "Scheduler entered isolated state @middle");
-}
-
-// Verify the scheduler skips an isolated state at the end of the declaration
-// order, treating the last non-isolated state as the terminal state.
-#[test]
-fn test_isolated_state_at_end_is_skipped_by_scheduler() {
-    let visited_isolated: bool = banish! {
-        @first
-            done? {
-                return false;
-            }
-
-        #[isolate]
-        @cleanup
-            flag? {
-                return true;
-            }
-    };
-
-    assert!(!visited_isolated, "Scheduler entered isolated state @cleanup");
 }
 
 // Verify that an isolated state is reachable via explicit transition and
@@ -68,4 +48,23 @@ fn test_isolated_state_reachable_via_transition() {
     };
 
     assert_eq!(result, "ok");
+}
+
+// Verify that an isolated state are skipped as entry points.
+#[test]
+fn test_isolated_state_as_first_state() {
+    let result = banish! {
+        #[isolate]
+        @first
+            ret? {
+                return true;
+            }
+
+        @second
+            ret? {
+                return false;
+            }
+    };
+
+    assert!(!result, "Isolated state was entry point.");
 }

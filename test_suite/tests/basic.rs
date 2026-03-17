@@ -12,25 +12,6 @@ fn test_hello_world_completes() {
     }
 }
 
-// Verify that an isolated state with max_iter correctly exhausts and
-// transitions to the redirect target rather than looping forever.
-#[test]
-fn test_hello_world_with_max_iter_transition_completes() {
-    banish! {
-        #[isolate, trace, max_iter = 2 => @end]
-        @hello
-            print ? true {
-                println!("Hello, world!");
-            }
-
-        @end
-            print? {
-                println!("Goodbye, world!");
-                return;
-            }
-    }
-}
-
 /// Redirect fires on the (N+1)th entry, not the Nth.
 /// Redirect target receives control and can itself transition further.
 /// Verifies the redirect integrates correctly with the state scheduler.

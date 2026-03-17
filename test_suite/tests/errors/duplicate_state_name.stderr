@@ -1,0 +1,5 @@
+error: Duplicate state name 'foo'
+ --> tests/errors/duplicate_state_name.rs:8:10
+  |
+8 |         @foo
+  |          ^^^

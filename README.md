@@ -19,18 +19,21 @@ fn main() {
                 ticks = 0;
                 println!("Red light");
             }
+
             timer ? ticks < 3 {
                 ticks += 1;
             }
 
         @green
             announce? { println!("Green light"); }
+
             timer ? ticks < 6 {
                 ticks += 1;
             }
 
         @yellow
             announce? { println!("Yellow light"); }
+
             timer ? ticks < 10 {
                 ticks += 1;
             } !? { => @red; }
@@ -53,10 +56,10 @@ cargo add banish
 
 ## Why Banish?
 * **Fixed-Point Looping:** States automatically re-evaluate their rules until none of them fire, then advance.
+* **Flexible Transitions:** States advance implicitly in declaration order by default. Explicit `=> @state` transitions let you jump anywhere when you need to.
 * **Zero Runtime Overhead:** Banish is a procedural macro. It generates standard optimized Rust at compile time. No interpreter, no allocations, no virtual machine.
 * **Full Rust Integration:** Rule bodies are plain Rust. Closures, external crates, mutable references. Everything works as you'd expect.
 * **Self-Documenting Structure**: Named states and named rules make the shape of your logic readable at a glance, without requiring comments to explain what each block is doing.
-* **Flexible Transitions:** States advance implicitly in declaration order by default. Explicit `=> @state` transitions let you jump anywhere when you need to.
 
 ## Comparison
 Most state machines in Rust end up as a `loop` wrapping a `match` wrapping a pile of `if` chains with careful flag management. The structure of the problem gets lost in the structure of the code. Banish flips this around. You write the *what*, not the *how*.
@@ -84,6 +87,7 @@ fn main() {
                     println!("Red light");
                     first_iteration = false;
                 }
+
                 let mut interaction = false;
                 if ticks < 3 { ticks += 1; interaction = true; }
                 if !interaction { state = Light::Green; first_iteration = true; }
@@ -93,6 +97,7 @@ fn main() {
                     println!("Green light");
                     first_iteration = false;
                 }
+
                 let mut interaction = false;
                 if ticks < 6 { ticks += 1; interaction = true; }
                 if !interaction { state = Light::Yellow; first_iteration = true; }
@@ -102,6 +107,7 @@ fn main() {
                     println!("Yellow light");
                     first_iteration = false;
                 }
+                
                 if ticks < 10 {
                     ticks += 1;
                 } else {
