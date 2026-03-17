@@ -1,4 +1,4 @@
-error: Unknown state `nowhere`
+error: Unknown state transition `nowhere`
  --> tests/errors/unknown_transition_target.rs:6:23
   |
 6 |             go? { => @nowhere; }

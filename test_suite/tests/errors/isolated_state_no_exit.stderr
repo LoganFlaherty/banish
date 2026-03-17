@@ -1,4 +1,4 @@
-error: Isolated state 'handler' has no exit. Add a `return`, `=> @state` transition, or `max_iter = N => @state` redirect
+error: Isolated state `handler` has no exit. Add a `return`, `=> @state` transition, or `max_iter = N => @state` redirect
   --> tests/errors/isolated_state_no_exit.rs:11:10
    |
 11 |         @handler

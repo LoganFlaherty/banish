@@ -60,9 +60,14 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .enumerate()
         .map(|(index, state)| generate_state(state, &input, index, &isolated_indices));
 
+    // Set entry state. Ignoring isolated states.
+    let entry_state: usize = input.states.iter()
+        .position(|s| !s.attrs.isolate)
+        .unwrap_or(0);
+
     let expanded: proc_macro2::TokenStream = quote! {
         (move || {
-            let mut __current_state: usize = 0;
+            let mut __current_state: usize = #entry_state;
             let mut __interaction: bool = false;
             #(#entry_counters)*
             'banish_main: loop {

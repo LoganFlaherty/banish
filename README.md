@@ -3,7 +3,7 @@
 [![Docs.rs](https://docs.rs/banish/badge.svg)](https://docs.rs/banish)
 [![License](https://img.shields.io/crates/l/banish.svg)](https://github.com/LoganFlaherty/banish/blob/main/LICENSE)
 
-Banish is a declarative DSL for building rule-based state machines in Rust. States evaluate their rules until reaching a fixed point or triggering a transition, reducing control flow boilerplate.
+Banish is a declarative DSL for building rule-based state machines in Rust. States and rules replace manual loops and flag management, reducing control flow boilerplate. You write the what, not the how.
 
 ```rust
 use banish::banish;
@@ -62,7 +62,7 @@ cargo add banish
 * **Self-Documenting Structure**: Named states and named rules make the shape of your logic readable at a glance, without requiring comments to explain what each block is doing.
 
 ## Comparison
-Most state machines in Rust end up as a `loop` wrapping a `match` wrapping a pile of `if` chains with careful flag management. The structure of the problem gets lost in the structure of the code. Banish flips this around. You write the *what*, not the *how*.
+Most state machines in Rust end up as a `loop` wrapping a `match` wrapping a pile of `if` chains with careful flag management. The structure of the problem gets lost in the structure of the code. Banish flips this around.
 
 Here's the traffic light example from above written by hand:
 
@@ -125,17 +125,17 @@ The manual version requires you to declare the enum, wire up the entry counter, 
 
 ## Concepts
 
-**States** (`@name`) group related rules. The machine starts at the first declared state and advances through them in order.
+**States** (`@name`) group related rules. The machine starts at the first declared non-isolated state and advances through them in order.
 
 **Rules** (`name ? condition { body }`) fire when their condition is true. After firing, the state re-evaluates from the top. Once a full pass completes with no rules firing, the state has reached its fixed point and the machine advances.
 
-**Conditionless rules** (`name ? { body }`) fire exactly once per state entry, on the first pass.
+**Fallback branches** (`!? { body }`) run when the preceding rule's condition is false. Does not trigger re-evaluation on its own.
 
-**Fallback branches** (`!? { body }`) run when a rule's condition is false, every pass.
+**Conditionless rules** (`name ? { body }`) fire exactly once on the first pass of each state entry. Cannot have a fallback branch.
 
 **Explicit transitions** (`=> @state;`) jump to any named state immediately, bypassing the implicit scheduler.
 
-**Return values** (`return expr;`) work naturally. Exits the entire `banish!` block with a value, just like returning from a closure.
+**Return values** (`return expr;`) exit the entire `banish!` block with a value. The block can be assigned to a variable or used as a function's return expression.
 
 **Early exit** (`break;` / `continue;`) work natively inside rule bodies against the generated fixed-point loop. `break` exits the current state and lets the scheduler advance normally. `continue` restarts rule evaluation from the top immediately.
 
@@ -151,7 +151,7 @@ Attributes go above a state declaration and modify its behavior.
 
 | Attribute | Description |
 |---|---|
-| `isolate` | Removes the state from implicit scheduling. Only reachable via explicit `=> @state` transition. |
+| `isolate` | Removes the state from implicit scheduling. Only reachable via explicit `=> @state` transition. Must have a defined exit path. |
 | `max_iter = N` | Caps the fixed-point loop to N iterations, then advances normally. |
 | `max_iter = N => @state` | Same, but transitions to `@state` on exhaustion instead of advancing. |
 | `max_entry = N` | Limits how many times this state can be entered. Returns on the (N+1)th entry. |

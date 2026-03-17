@@ -1,4 +1,4 @@
-error: Unknown state `nowhere`
+error: Unknown state transition `nowhere`
  --> tests/errors/unknown_transition_target_max_entry.rs:5:29
   |
 5 |         #[max_entry = 1 => @nowhere]

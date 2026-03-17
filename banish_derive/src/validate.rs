@@ -12,7 +12,7 @@ pub fn validate_state_and_rule_names(input: &Context) -> syn::Result<()> {
         if !state_names.insert(name.clone()) {
             return Err(syn::Error::new(
                 state.name.span(),
-                format!("Duplicate state name '{}'", name),
+                format!("Duplicate state name `{}`", name),
             ));
         }
 
@@ -23,7 +23,7 @@ pub fn validate_state_and_rule_names(input: &Context) -> syn::Result<()> {
                 return Err(syn::Error::new(
                     rule.name.span(),
                     format!(
-                        "Duplicate rule '{}' in state '{}'",
+                        "Duplicate rule name `{}` in state `{}`",
                         name, state.name
                     ),
                 ));
@@ -46,7 +46,7 @@ pub fn validate_transition_targets(input: &Context) -> syn::Result<()> {
         if !known.contains(&ident.to_string()) {
             Err(syn::Error::new(
                 ident.span(),
-                format!("Unknown state `{}`", ident),
+                format!("Unknown state transition `{}`", ident),
             ))
         } else { Ok(()) }
     };
@@ -101,7 +101,7 @@ pub fn validate_final_state_has_exit(input: &Context) -> syn::Result<()> {
             return Err(syn::Error::new(
                 state.name.span(),
                 format!(
-                    "Final state '{}' must have a return or state transition statement",
+                    "Final state `{}` must have a return or state transition statement",
                     state.name
                 ),
             ));
@@ -110,13 +110,13 @@ pub fn validate_final_state_has_exit(input: &Context) -> syn::Result<()> {
     Ok(())
 }
 
-/// Validates isolated state constraints:
+/// Validates isolated state constraint:
 ///
-/// * Every isolated state must have a defined exit — either a `return` or
-///   `=> @state` in its rules, or a `max_iter = N => @state` redirect.
-///   Without one, the state has no way to return control after its fixed point
-///   is reached. `max_entry = N => @state` does not count — it only fires on
-///   the (N+1)th entry and does nothing to exit entries 1 through N.
+/// Every isolated state must have a defined exit — either a `return` or
+/// => @state` in its rules, or a `max_iter = N => @state` redirect.
+/// Without one, the state has no way to return control after its fixed point
+/// is reached. `max_entry = N => @state` does not count — it only fires on
+/// the (N+1)th entry and does nothing to exit entries 1 through N.
 pub fn validate_isolated_states(input: &Context) -> syn::Result<()> {
     for state in input.states.iter().filter(|s: &&crate::parse_ast::State| s.attrs.isolate) {
 
@@ -137,7 +137,7 @@ pub fn validate_isolated_states(input: &Context) -> syn::Result<()> {
             return Err(syn::Error::new(
                 state.name.span(),
                 format!(
-                    "Isolated state '{}' has no exit. Add a `return`, `=> @state` transition, \
+                    "Isolated state `{}` has no exit. Add a `return`, `=> @state` transition, \
                      or `max_iter = N => @state` redirect",
                     state.name
                 ),

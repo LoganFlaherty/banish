@@ -19,9 +19,9 @@ This document is the full technical reference for Banish. For a quick introducti
 
 ## Execution Model
 
-A `banish!` block expands to a labeled loop containing a `match` over an internal state index. The machine starts at the first declared state and advances through them in declaration order.
+A `banish!` block expands to a labeled loop containing a `match` over an internal state index. The machine starts at the first non-isolated state in declaration order and advances through non-isolated states in declaration order. Isolated states are skipped by the scheduler and can only be entered via an explicit `=> @state` transition.
 
-Within each state, rules are evaluated top to bottom on every pass. If any rule fires, `__interaction` is set to `true` and the state loops back to the top, re-evaluating all rules from the beginning. Once a full pass completes with no rules firing — the fixed point — the machine advances to the next state.
+Within each state, rules are evaluated top to bottom on every pass. If any rule fires, `__interaction` is set to `true` and the state loops back to the top, re-evaluating all rules from the beginning. Once a full pass completes with no rules firing (the fixed point) the machine advances to the next non-isolated state.
 
 ```
   enter state
@@ -37,7 +37,7 @@ Within each state, rules are evaluated top to bottom on every pass. If any rule 
   fixed point reached
        │
        ▼
-  advance to next state
+  advance to next non-isolated state
 ```
 
 All of this is generated at compile time. There is no runtime interpreter, allocator, or virtual machine.
@@ -58,7 +58,7 @@ banish! {
 }
 ```
 
-The machine always starts at the first declared state. The implicit scheduler advances to the next state once the current state reaches its fixed point. States can be removed from implicit scheduling with the [`isolate`](#isolate) attribute.
+The machine always starts at the first non-isolated state in declaration order. The implicit scheduler advances to the next non-isolated state once the current state reaches its fixed point. States can be removed from implicit scheduling with the [`isolate`](#isolate) attribute.
 
 **Naming:** State names follow standard Rust identifier rules. Duplicate state names are a compile error.
 
@@ -126,7 +126,7 @@ A fallback branch runs when the rule's condition is `false`. Unlike the rule bod
 
 ### Implicit (Scheduler)
 
-Once a state reaches its fixed point, the machine automatically advances to the next state in declaration order. This is the default behavior and requires no syntax.
+Once a state reaches its fixed point, the machine automatically advances to the next non-isolated state in declaration order. This is the default behavior and requires no syntax.
 
 ### Explicit (`=> @state`)
 
@@ -134,7 +134,7 @@ Once a state reaches its fixed point, the machine automatically advances to the 
 => @state;
 ```
 
-An explicit transition immediately jumps to the named state, bypassing the implicit scheduler. It can appear anywhere in a rule body or fallback branch. The remaining rules in the current pass are abandoned and the target state begins a fresh evaluation.
+An explicit transition immediately jumps to the named state, bypassing the implicit scheduler. It must appear as a standalone statement in a rule body or fallback branch. The remaining rules in the current pass are abandoned and the target state begins a fresh evaluation.
 
 ```rust
 @yellow
@@ -181,7 +181,7 @@ fn find(buffer: &[String], target: &str) -> Option<usize> {
         @search
             not_found ? idx >= buffer.len() { return None; }
             found ? buffer[idx] == target { return Some(idx); }
-            advance ? { idx += 1; }
+            advance ? idx < buffer.len() { idx += 1; }
     }
 }
 ```
@@ -223,7 +223,7 @@ banish! {
 ```
 
 **Constraints:**
-* An isolated state must have a defined exit: either a `return`, `=> @state` in its rules, or `max_iter = N => @state`. Isolated states with no exit are a compile error. `max_entry = N => @state` does not satisfy this requirement — it only fires on the (N+1)th entry and provides no exit for entries 1 through N.
+* An isolated state must have a defined exit: either a `return`, `=> @state` in its rules, or `max_iter = N => @state`. Isolated states with no exit are a compile error. `max_entry = N => @state` does not satisfy this requirement because it only fires on the (N+1)th entry and provides no exit for entries 1 through N.
 
 ---
 
@@ -272,13 +272,13 @@ Limits the number of times a state can be entered. On the `(N+1)`th entry the st
 
 In the traffic light example above, the machine exits after `@red` is entered a third time. The entry counter persists for the lifetime of the `banish!` block and is not reset between cycles.
 
-**Note:** `max_entry = N => @state` on an isolated state does not remove the requirement for a rule-level exit. The redirect only fires on the (N+1)th entry — entries 1 through N still need a `return`, `=> @state`, or `max_iter = N => @state` to exit normally.
+**Note:** `max_entry = N => @state` on an isolated state does not remove the requirement for a rule-level exit. The redirect only fires on the (N+1)th entry. Entries 1 through N still need a `return`, `=> @state`, or `max_iter = N => @state` to exit normally.
 
 ---
 
 ### `trace`
 
-Emits diagnostics via [`log::trace!`](https://docs.rs/log) on state entry and before each rule evaluation. Requires a `log`-compatible backend to capture output — without one, diagnostics are silently discarded.
+Emits diagnostics via [`log::trace!`](https://docs.rs/log) on state entry and before each rule evaluation. Requires a `log`-compatible backend to capture output. Without one, diagnostics are silently discarded.
 
 ```rust
 #[trace]
@@ -423,7 +423,7 @@ fn main() {
 }
 ```
 
-`end_turn?` is conditionless, so it fires exactly once per state entry. After `attack?` has fired and `check_win`/`check_loss` have been evaluated. This ensures the turn always ends rather than looping indefinitely.
+`end_turn?` is conditionless, so it fires exactly once per state entry, after `attack?` has fired and `check_win`/`check_loss` have been evaluated. This ensures the turn always ends rather than looping indefinitely.
 
 ---
 
@@ -441,7 +441,7 @@ fn find_index(buffer: &[String], target: &str) -> Option<usize> {
             // bounds check must come first to prevent out-of-bounds indexing below
             not_found ? idx >= buffer.len() { return None; }
             found ? buffer[idx] == target { return Some(idx); }
-            advance?  { idx += 1; }
+            advance ? idx < buffer.len() { idx += 1; }
     }
 }
 ```
@@ -491,17 +491,17 @@ Banish validates the macro input at compile time and produces span-accurate erro
 
 | Error | Cause | Fix |
 |---|---|---|
-| `Duplicate state name 'X'` | Two states share the same name. | Rename one of the states. |
-| `Duplicate rule name 'X' in state 'Y'` | Two rules in the same state share a name. | Rename one of the rules. |
-| `Unknown state 'X'` | A `=> @state` transition or `max_iter` redirect refers to an undeclared state. | Declare the state or fix the name. |
-| `Final state 'X' must have a return or state transition` | The last non-isolated state has no exit path. | Add `return` or `=> @state` to at least one rule. |
-| `Isolated state 'X' has no exit` | An isolated state has no `return`, `=> @state`, or `max_iter = N => @state`. | Add an exit path. `max_entry = N => @state` alone is not sufficient. |
-| `Unknown attribute 'X'` | An unrecognised attribute was used inside `#[...]`. | Check spelling against the supported attribute list. |
-| `Duplicate attribute 'X'` | The same attribute appears more than once in `#[...]`. | Remove the duplicate. |
-| `max_iter value must be greater than zero` | `max_iter = 0` was specified. | Use a value of at least 1. |
-| `max_entry value must be greater than zero` | `max_entry = 0` was specified. | Use a value of at least 1. |
-| `A state may only have one attribute block` | A state has two or more `#[...]` blocks. | Merge all attributes into a single comma-separated `#[...]` block. |
-| `Rule 'X' cannot have an '!?' clause without a condition` | A conditionless rule has a fallback branch. | Either add a condition to the rule or remove the `!?` block. |
+| ``Duplicate state name `X` `` | Two states share the same name. | Rename one of the states. |
+| ``Duplicate rule name `X` in state `Y` `` | Two rules in the same state share a name. | Rename one of the rules. |
+| ``Unknown state transition `X` `` | A `=> @state` transition, `max_iter` redirect, or `max_entry` redirect refers to an undeclared state. | Declare the state or fix the name. |
+| ``Final state `X` must have a return or state transition statement`` | The last non-isolated state has no exit path. | Add `return` or `=> @state` to at least one rule. |
+| ``Isolated state `X` has no exit...`` | An isolated state has no `return`, `=> @state`, or `max_iter = N => @state`. | Add an exit path. `max_entry = N => @state` alone is not sufficient. |
+| ``Unknown state attribute `X` `` | An unrecognised attribute was used inside `#[...]`. | Check spelling against the supported attribute list. |
+| ``Duplicate attribute `X` `` | The same attribute appears more than once in `#[...]`. | Remove the duplicate. |
+| `` `max_iter` value must be greater than zero `` | `max_iter = 0` was specified. | Use a value of at least 1. |
+| `` `max_entry` value must be greater than zero `` | `max_entry = 0` was specified. | Use a value of at least 1. |
+| ``A state may only have one attribute block `#[...]` `` | A state has two or more `#[...]` blocks. | Merge all attributes into a single comma-separated `#[...]` block. |
+| ``Rule `X` cannot have an `!?` branch without a condition`` | A conditionless rule has a fallback branch. | Either add a condition to the rule or remove the `!?` block. |
 
 ---
 

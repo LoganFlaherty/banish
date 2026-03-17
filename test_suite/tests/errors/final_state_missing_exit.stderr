@@ -1,4 +1,4 @@
-error: Final state 'foo' must have a return or state transition statement
+error: Final state `foo` must have a return or state transition statement
  --> tests/errors/final_state_missing_exit.rs:6:10
   |
 6 |         @foo

@@ -1,4 +1,4 @@
-error: Duplicate rule 'step' in state 'foo'
+error: Duplicate rule name `step` in state `foo`
  --> tests/errors/duplicate_rule_name.rs:7:13
   |
 7 |             step? { return; }

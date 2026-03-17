@@ -23,6 +23,7 @@ pub struct State {
 /// * `isolate` — The state is removed from implicit sequential scheduling.
 ///   It can only be entered via an explicit `=> @state_name` transition.
 ///   Isolated states are excluded from the "final state must return" check.
+///   Also is ignored as an entry state. Must have a defined exit path.
 ///
 /// * `max_iter = N` — Caps the internal fixed-point loop to N iterations.
 ///   If the loop has not converged by then, the state exits normally (advances
@@ -126,7 +127,7 @@ impl Parse for Rule {
             return Err(syn::Error::new(
                 name.span(),
                 format!(
-                    "Rule '{}' cannot have an '!?' clause without a condition.",
+                    "Rule `{}` cannot have an `!?` branch without a condition.",
                     name
                 ),
             ));
@@ -235,7 +236,7 @@ fn parse_rule_condition(input: &syn::parse::ParseBuffer) -> Result<Option<Expr>>
         // Loop until the start of the body block
         while !input.peek(syn::token::Brace) {
             if input.is_empty() {
-                return Err(input.error("Unexpected end of input, expected rule body '{'"));
+                return Err(input.error("Unexpected end of input, expected rule body `{`"));
             }
             // Pull one token at a time
             cond_tokens.extend(std::iter::once(input.parse::<TokenTree>()?));

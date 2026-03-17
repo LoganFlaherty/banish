@@ -9,5 +9,5 @@ readme = "README.md"
 keywords = ["state-machine", "dsl", "declarative", "proc-macro", "automata"]
 
 [dependencies]
-banish_derive = "1.2.3"
+banish_derive = {path="../banish_derive"}
 log = "0.4.29"
