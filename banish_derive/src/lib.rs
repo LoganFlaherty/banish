@@ -64,20 +64,37 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let entry_state: usize = input.states.iter()
         .position(|s| !s.attrs.isolate)
         .unwrap_or(0);
-
-    let expanded: proc_macro2::TokenStream = quote! {
-        (move || {
-            let mut __current_state: usize = #entry_state;
-            let mut __interaction: bool = false;
-            #(#entry_counters)*
-            'banish_main: loop {
-                match __current_state {
-                    #(#state_blocks)*
-                    _ => { unreachable!("banish: invalid state index"); },
+    
+    let expanded: proc_macro2::TokenStream;
+    if input.attrs.is_async {
+        expanded = quote! {
+            async move {
+                let mut __current_state: usize = #entry_state;
+                let mut __interaction: bool = false;
+                #(#entry_counters)*
+                'banish_main: loop {
+                    match __current_state {
+                        #(#state_blocks)*
+                        _ => { unreachable!("Invalid state index"); },
+                    }
                 }
             }
-        })()
-    };
+        };
+    } else {
+        expanded = quote! {
+            (move || {
+                let mut __current_state: usize = #entry_state;
+                let mut __interaction: bool = false;
+                #(#entry_counters)*
+                'banish_main: loop {
+                    match __current_state {
+                        #(#state_blocks)*
+                        _ => { unreachable!("Invalid state index"); },
+                    }
+                }
+            })()
+        };
+    }
 
     proc_macro::TokenStream::from(expanded)
 }

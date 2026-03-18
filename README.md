@@ -12,17 +12,20 @@ use banish::banish;
 fn main() {
     let mut ticks: i32 = 0;
     banish! {
-        // Returns on the third entry immediately
+        // State attribute that triggers a return on the third entry
         #[max_entry = 2]
-        @red
+        @red // Defines the state: red
+            // Conditionless rule that runs once per state entry. Ignores iterations
             announce? {
                 ticks = 0;
-                println!("Red light");
+                println!("\nRed light");
             }
 
+            // Causes @red to loop till ticks = 3
             timer ? ticks < 3 {
                 ticks += 1;
             }
+        // @red finises and transitions to @green
 
         @green
             announce? { println!("Green light"); }
@@ -36,7 +39,7 @@ fn main() {
 
             timer ? ticks < 10 {
                 ticks += 1;
-            } !? { => @red; }
+            } !? { => @red; } // Explicit transition to @red
     }
 }
 ```
@@ -45,7 +48,7 @@ fn main() {
 
 ```toml
 [dependencies]
-banish = "1.2.3"
+banish = "1.3.0"
 ```
 
 Or with cargo:
@@ -84,7 +87,7 @@ fn main() {
                     if red_entries >= 2 { break; }
                     red_entries += 1;
                     ticks = 0;
-                    println!("Red light");
+                    println!("\nRed light");
                     first_iteration = false;
                 }
 
@@ -158,6 +161,23 @@ Attributes go above a state declaration and modify its behavior.
 | `max_entry = N => @state` | Same, but transitions to `@state` on exhaustion instead of returning. |
 | `trace` | Emits diagnostics via `log::trace!` on state entry and before each rule evaluation. Requires a `log`-compatible backend (see below). |
 
+## Block Attributes
+ 
+Block attributes go at the top of a `banish!` block, before the first state, and modify the behavior of the entire block.
+ 
+```rust
+banish! {
+    #![async]
+ 
+    @my_state
+        ...
+}
+```
+ 
+| Attribute | Description |
+|---|---|
+| `async` | Expands the block to an `async move { ... }` expression. Required for `.await` inside rule bodies. The result must be `.await`ed by the caller. |
+
 ## Tracing
 
 The `trace` attribute emits diagnostics through the [`log`](https://docs.rs/log) facade, giving you full control over where the output goes. `env_logger` is the simplest backend:
@@ -188,7 +208,8 @@ RUST_LOG=trace cargo run -q 2> trace.log
 
 ## More Examples
 
-The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#dragon-fight) example demonstrates early return with a value, multi-state transitions, and external crate usage. The [Double For Loop](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#double-for-loop) example shows self-transitions and returning a tuple.
+* The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#dragon-fight) example is a turn-based battle that demonstrates early return with a value, external crate usage, multi-state transitions, fallback branches, and using the state attribute `max_iter` with the transition option.
+* The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async]`, `.await` inside rule bodies, `#[trace]`, external crate usage, and returning a tuple value from an async block.
 
 ## Full Reference
 For a full treatment of every feature, attribute, and error, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).

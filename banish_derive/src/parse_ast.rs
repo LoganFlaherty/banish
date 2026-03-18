@@ -8,6 +8,21 @@ use syn::{
 
 pub struct Context {
     pub states: Vec<State>,
+    pub attrs: ContextAttrs,
+}
+
+/// Parsed attributes that can be placed on a `banish!` block with `#![...]`.
+///
+/// # Supported attributes
+///
+/// * `async` — Expands the block to an `async move { ... }` expression instead
+///   of an immediately invoked closure. The result is a `Future` and must be
+///   `.await`ed. Required for using `.await` inside rule bodies.
+///
+/// Attributes can be combined freely: `#![async]`
+#[derive(Default)]
+pub struct ContextAttrs {
+    pub is_async: bool,
 }
 
 pub struct State {
@@ -73,10 +88,20 @@ pub enum BanishStmt {
 
 impl Parse for Context {
     fn parse(input: ParseStream) -> Result<Self> {
+        // Parse optional inner attribute block: #![attr, ...]
+        // Must peek two tokens to distinguish #![...] from a state-level #[...].
+        let attrs: ContextAttrs = if input.peek(Token![#]) && input.peek2(Token![!]) {
+            input.parse::<Token![#]>()?;
+            input.parse::<Token![!]>()?;
+            let content: syn::parse::ParseBuffer<'_>;
+            bracketed!(content in input);
+            parse_context_attrs(&content)?
+        } else { ContextAttrs::default() };
+
         let mut states: Vec<State> = Vec::with_capacity(2);
         while !input.is_empty() { states.push(input.parse()?); }
 
-        Ok(Context { states })
+        Ok(Context { states, attrs })
     }
 }
 
@@ -139,6 +164,37 @@ impl Parse for Rule {
 
 
 //// Helper Functions
+
+/// Parse the comma-separated list of attributes inside `#![...]`.
+fn parse_context_attrs(content: &syn::parse::ParseBuffer) -> Result<ContextAttrs> {
+    let mut attrs: ContextAttrs = ContextAttrs::default();
+
+    while !content.is_empty() {
+        if content.peek(Token![async]) {
+            let kw = content.parse::<Token![async]>()?;
+            if attrs.is_async {
+                return Err(syn::Error::new(kw.span, "Duplicate attribute `async`"));
+            }
+            attrs.is_async = true;
+        } else {
+            let key: Ident = content.parse()?;
+            return Err(syn::Error::new(
+                key.span(),
+                format!(
+                    "Unknown block attribute `{}`. Expected attribute(s): `async`",
+                    key
+                ),
+            ));
+        }
+
+        // Consume optional trailing comma between attributes.
+        if !content.is_empty() {
+            content.parse::<Token![,]>()?;
+        }
+    }
+
+    Ok(attrs)
+}
 
 /// Parse the comma-separated list of attributes inside `#[...]`.
 fn parse_state_attrs(content: &syn::parse::ParseBuffer) -> Result<StateAttrs> {

@@ -97,7 +97,7 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
                     let target_index: usize = input.states
                         .iter()
                         .position(|s: &State| &s.name == target)
-                        .expect("banish: max_iter state transition not found. Should have been caught by validate_transition_targets");
+                        .expect("`max_iter` state transition not found. Should have been caught by validate_transition_targets");
                     let target_lit: syn::Index = syn::Index::from(target_index);
                     quote! {
                         __current_state = #target_lit;
@@ -147,7 +147,7 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
                 let target_index: usize = input.states
                     .iter()
                     .position(|s: &State| &s.name == target)
-                    .expect("banish: max_entry state transition not found. Should have been caught by validate_transition_targets");
+                    .expect("`max_entry` state transition not found. Should have been caught by validate_transition_targets");
                 let target_lit: syn::Index = syn::Index::from(target_index);
                 quote! {
                     __current_state = #target_lit;
