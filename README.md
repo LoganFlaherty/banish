@@ -3,7 +3,7 @@
 [![Docs.rs](https://docs.rs/banish/badge.svg)](https://docs.rs/banish)
 [![License](https://img.shields.io/crates/l/banish.svg)](https://github.com/LoganFlaherty/banish/blob/main/LICENSE)
 
-Banish is a declarative DSL for building rule-based state machines in Rust. States and rules replace manual loops and flag management, reducing control flow boilerplate. You write the what, not the how.
+Banish is a declarative DSL for building rule-based state machines in Rust. States and rules replace enums, manual loops, and flag management, reducing boilerplate. You write the **what**, not the **how**.
 
 ```rust
 use banish::banish;
@@ -190,6 +190,7 @@ RUST_LOG=trace cargo run -q 2> trace.log
 
 The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#dragon-fight) example demonstrates early return with a value, multi-state transitions, and external crate usage. The [Double For Loop](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#double-for-loop) example shows self-transitions and returning a tuple.
 
+## Full Reference
 For a full treatment of every feature, attribute, and error, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 
 ## Contributing
