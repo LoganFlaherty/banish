@@ -490,9 +490,55 @@ fn main() {
 
 ---
 
+### Record Normalizer
+ 
+A multi-pass normalization pipeline demonstrated with fixed-point looping. Each rule independently checks whether its transformation is still needed, making the state self-stabilizing without manual loop management.
+ 
+```rust
+use banish::banish;
+ 
+fn main() {
+    let mut records: Vec<String> = vec![
+        "  Alice  ".into(),
+        "bob".into(),
+        "  ALICE".into(),
+        "".into(),
+        "Charlie".into(),
+        "bob".into(),
+    ];
+ 
+    banish! {
+        @normalize
+            trim ? records.iter().any(|r| r != r.trim()) {
+                records = records.into_iter().map(|r| r.trim().to_string()).collect();
+            }
+ 
+            lowercase ? records.iter().any(|r| r != &r.to_lowercase()) {
+                records = records.into_iter().map(|r| r.to_lowercase()).collect();
+            }
+ 
+            remove_empty ? records.iter().any(|r| r.is_empty()) {
+                records.retain(|r| !r.is_empty());
+            }
+ 
+        @finalize
+            dedup? {
+                records.sort();
+                records.dedup();
+                println!("{:?}", records); // ["alice", "bob", "charlie"]
+                return;
+            }
+    }
+}
+```
+ 
+`@normalize` re-evaluates until all three rules stop firing. Each pass that changes the data triggers another, converging when the records are fully trimmed, lowercased, and non-empty. `@finalize` sorts and deduplicates on a single conditionless pass, then returns.
+ 
+---
+
 ### Async HTTP Fetch
 
-An async workflow that demonstrates `#![async]`, `.await` inside rule bodies, `#[trace]`, external crate usage, and returning a tuple value from an async block. Requires `tokio`, `reqwest`, `serde`, and `env_logger`.
+An async workflow that demonstrates `#![async]`, `.await`, `#[trace]`, external crate usage, and returning a tuple value from an async block. Requires `tokio`, `reqwest`, `serde`, and `env_logger`.
 
 ```toml
 [dependencies]

@@ -13,7 +13,7 @@ mod parse_ast;
 mod validate;
 mod codegen;
 
-use parse_ast::Context;
+use parse_ast::Block;
 use validate::{ validate_state_and_rule_names, validate_transition_targets,
                 validate_final_state_has_exit, validate_isolated_states };
 use codegen::{ entry_counter_ident, generate_state };
@@ -21,7 +21,7 @@ use codegen::{ entry_counter_ident, generate_state };
 
 #[proc_macro]
 pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input: Context = parse_macro_input!(input as Context);
+    let input: Block = parse_macro_input!(input as Block);
 
     if let Err(err) = validate_state_and_rule_names(&input) {
         return err.to_compile_error().into();

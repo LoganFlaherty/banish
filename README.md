@@ -209,7 +209,8 @@ RUST_LOG=trace cargo run -q 2> trace.log
 ## More Examples
 
 * The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#dragon-fight) example is a turn-based battle that demonstrates early return with a value, external crate usage, multi-state transitions, fallback branches, and using the state attribute `max_iter` with the transition option.
-* The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async]`, `.await` inside rule bodies, `#[trace]`, external crate usage, and returning a tuple value from an async block.
+* The [Record Normalizer](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#record-normalizer) example is a multi-pass normalization pipeline demonstrated with fixed-point looping. Each rule independently checks whether its transformation is still needed, making the state self-stabilizing without manual loop management.
+* The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async]`, `.await`, `#[trace]`, external crate usage, and returning a tuple value from an async block.
 
 ## Full Reference
 For a full treatment of every feature, attribute, and error, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
@@ -221,7 +222,7 @@ Contributions are welcome. Before opening a PR, please open a discussion first. 
 The test suite covers all documented behavior and edge cases. Run it locally before submitting:
 
 ```
-cargo test
+cargo test -- --include-ignored
 ```
 
 New behavior and edge cases should include corresponding tests.

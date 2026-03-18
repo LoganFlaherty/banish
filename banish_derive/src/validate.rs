@@ -1,11 +1,11 @@
 use syn::{ Expr, Stmt };
 use std::collections::HashSet;
-use crate::parse_ast::{ Context, BanishStmt };
+use crate::parse_ast::{ Block, BanishStmt };
 
 
 /// Validates that state names are unique across the machine, and that rule
 /// names are unique within each state.
-pub fn validate_state_and_rule_names(input: &Context) -> syn::Result<()> {
+pub fn validate_state_and_rule_names(input: &Block) -> syn::Result<()> {
     let mut state_names: HashSet<String> = HashSet::new();
     for state in &input.states {
         let name: String = state.name.to_string();
@@ -37,7 +37,7 @@ pub fn validate_state_and_rule_names(input: &Context) -> syn::Result<()> {
 /// Validates that every transition target. Both `=> @state` in rule bodies and
 /// `max_iter = N => @state` in attributes. Refers to a declared state name.
 /// Errors point at the ident span of the unknown target.
-pub fn validate_transition_targets(input: &Context) -> syn::Result<()> {
+pub fn validate_transition_targets(input: &Block) -> syn::Result<()> {
     let known: HashSet<String> = input.states.iter()
         .map(|s: &crate::parse_ast::State| s.name.to_string())
         .collect();
@@ -84,7 +84,7 @@ pub fn validate_transition_targets(input: &Context) -> syn::Result<()> {
 /// The final non-isolated state must contain a return or explicit transition so
 /// the machine has a defined exit path. Isolated states are excluded because they
 /// are never reached by the sequential scheduler and therefore are never "last".
-pub fn validate_final_state_has_exit(input: &Context) -> syn::Result<()> {
+pub fn validate_final_state_has_exit(input: &Block) -> syn::Result<()> {
     if let Some(state) = input.states.iter().rev().find(|s: &&crate::parse_ast::State| !s.attrs.isolate) {
         let has_exit = state.rules.iter().any(|rule| {
             let check_stmts = |stmts: &Vec<BanishStmt>| stmts.iter()
@@ -117,7 +117,7 @@ pub fn validate_final_state_has_exit(input: &Context) -> syn::Result<()> {
 /// Without one, the state has no way to return control after its fixed point
 /// is reached. `max_entry = N => @state` does not count — it only fires on
 /// the (N+1)th entry and does nothing to exit entries 1 through N.
-pub fn validate_isolated_states(input: &Context) -> syn::Result<()> {
+pub fn validate_isolated_states(input: &Block) -> syn::Result<()> {
     for state in input.states.iter().filter(|s: &&crate::parse_ast::State| s.attrs.isolate) {
 
         let has_exit_in_rules: bool = state.rules.iter().any(|rule: &crate::parse_ast::Rule| {

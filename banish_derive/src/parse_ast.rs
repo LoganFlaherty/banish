@@ -6,9 +6,9 @@ use syn::{
 
 //// AST
 
-pub struct Context {
+pub struct Block {
     pub states: Vec<State>,
-    pub attrs: ContextAttrs,
+    pub attrs: BlockAttrs,
 }
 
 /// Parsed attributes that can be placed on a `banish!` block with `#![...]`.
@@ -21,7 +21,7 @@ pub struct Context {
 ///
 /// Attributes can be combined freely: `#![async]`
 #[derive(Default)]
-pub struct ContextAttrs {
+pub struct BlockAttrs {
     pub is_async: bool,
 }
 
@@ -86,22 +86,22 @@ pub enum BanishStmt {
 
 //// Parsing
 
-impl Parse for Context {
+impl Parse for Block {
     fn parse(input: ParseStream) -> Result<Self> {
         // Parse optional inner attribute block: #![attr, ...]
         // Must peek two tokens to distinguish #![...] from a state-level #[...].
-        let attrs: ContextAttrs = if input.peek(Token![#]) && input.peek2(Token![!]) {
+        let attrs: BlockAttrs = if input.peek(Token![#]) && input.peek2(Token![!]) {
             input.parse::<Token![#]>()?;
             input.parse::<Token![!]>()?;
             let content: syn::parse::ParseBuffer<'_>;
             bracketed!(content in input);
-            parse_context_attrs(&content)?
-        } else { ContextAttrs::default() };
+            parse_block_attrs(&content)?
+        } else { BlockAttrs::default() };
 
         let mut states: Vec<State> = Vec::with_capacity(2);
         while !input.is_empty() { states.push(input.parse()?); }
 
-        Ok(Context { states, attrs })
+        Ok(Block { states, attrs })
     }
 }
 
@@ -166,8 +166,8 @@ impl Parse for Rule {
 //// Helper Functions
 
 /// Parse the comma-separated list of attributes inside `#![...]`.
-fn parse_context_attrs(content: &syn::parse::ParseBuffer) -> Result<ContextAttrs> {
-    let mut attrs: ContextAttrs = ContextAttrs::default();
+fn parse_block_attrs(content: &syn::parse::ParseBuffer) -> Result<BlockAttrs> {
+    let mut attrs: BlockAttrs = BlockAttrs::default();
 
     while !content.is_empty() {
         if content.peek(Token![async]) {

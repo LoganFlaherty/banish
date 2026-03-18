@@ -52,7 +52,7 @@ fn test_isolated_state_reachable_via_transition() {
 
 // Verify that an isolated state are skipped as entry points.
 #[test]
-fn test_isolated_state_as_first_state() {
+fn test_isolated_state_as_first_state_skipped() {
     let result = banish! {
         #[isolate]
         @first

@@ -1,5 +1,5 @@
 use quote::quote;
-use crate::parse_ast::{ Context, State, BanishStmt };
+use crate::parse_ast::{ Block, State, BanishStmt };
 
 
 /// Returns a stable identifier for the `max_entry` counter of state `index`.
@@ -10,7 +10,7 @@ pub fn entry_counter_ident(index: usize) -> syn::Ident {
     )
 }
 
-pub fn generate_state(state: &State, input: &Context, index: usize,
+pub fn generate_state(state: &State, input: &Block, index: usize,
     isolated_indices: &[usize]) -> proc_macro2::TokenStream {
     let attrs: &crate::parse_ast::StateAttrs = &state.attrs;
 
@@ -192,7 +192,7 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
     }
 }
 
-pub fn generate_stmt(stmt: &BanishStmt, input: &Context) -> proc_macro2::TokenStream {
+pub fn generate_stmt(stmt: &BanishStmt, input: &Block) -> proc_macro2::TokenStream {
     match stmt {
         BanishStmt::Rust(stmt) => quote! { #stmt },
         BanishStmt::StateTransition(transition) => {
