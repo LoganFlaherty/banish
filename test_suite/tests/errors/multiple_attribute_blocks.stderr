@@ -1,5 +1,0 @@
-error: A state may only have one attribute block `#[...]`
- --> tests/errors/multiple_attribute_blocks.rs:6:9
-  |
-6 |         #[max_iter = 5]
-  |         ^

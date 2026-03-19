@@ -152,6 +152,29 @@ An explicit transition immediately jumps to the named state, bypassing the impli
 
 Transition targets must refer to a declared state name. Unknown targets are a compile error at the `=> @state` callsite.
 
+### Guarded Transitions (`=> @state if condition`)
+
+```
+=> @state if condition;
+```
+
+A guarded transition jumps to the named state only when `condition` evaluates to `true`. If the condition is `false`, the statement is a no-op and execution continues with the remaining statements in the rule body. Like an explicit transition, it must appear as a standalone statement.
+
+```rust
+@process
+    step? {
+        do_work();
+        => @done if finished;
+        log_progress(); // runs only when guard is false
+    }
+
+    timeout ? elapsed > limit { => @abort; }
+```
+
+This handles the most common case of needing a conditional jump without splitting the logic into a separate rule. The guard condition is any Rust expression that evaluates to `bool`.
+
+**Guarded transitions do not satisfy the exit requirement** for isolated states or the final-state validator. Because the guard may never be true, a state relying solely on guarded transitions has no guaranteed exit path. A non-guarded `=> @state` or `return` is still required.
+
 ### Early Exit (`break` / `continue`)
 
 Because rule bodies are plain Rust, the native loop control keywords work as-is against the generated fixed-point loop.
@@ -231,7 +254,7 @@ banish! {
 ```
 
 **Constraints:**
-* An isolated state must have a defined exit: either a `return`, `=> @state` in its rules, or `max_iter = N => @state`. Isolated states with no exit are a compile error. `max_entry = N => @state` does not satisfy this requirement because it only fires on the (N+1)th entry and provides no exit for entries 1 through N.
+* An isolated state must have a defined exit: either a `return`, `=> @state` in its rules, or `max_iter = N => @state`. Isolated states with no exit are a compile error. `max_entry = N => @state` does not satisfy this requirement because it only fires on the (N+1)th entry and provides no exit for entries 1 through N. `=> @state if condition` does not satisfy this requirement because the guard may never be true.
 
 ---
 
@@ -628,36 +651,18 @@ async fn main() {
 
 ---
 
-## Error Reference
-
-Banish validates the macro input at compile time and produces span-accurate errors pointing at the offending token.
-
-| Error | Cause | Fix |
-|---|---|---|
-| ``Duplicate state name `X` `` | Two states share the same name. | Rename one of the states. |
-| ``Duplicate rule name `X` in state `Y` `` | Two rules in the same state share a name. | Rename one of the rules. |
-| ``Unknown state transition `X` `` | A `=> @state` transition, `max_iter` redirect, or `max_entry` redirect refers to an undeclared state. | Declare the state or fix the name. |
-| ``Final state `X` must have a return or state transition statement`` | The last non-isolated state has no exit path. | Add `return` or `=> @state` to at least one rule. |
-| ``Isolated state `X` has no exit.`` | An isolated state has no `return`, `=> @state`, or `max_iter = N => @state`. | Add an exit path. `max_entry = N => @state` alone is not sufficient. |
-| ``Unknown state attribute `X` `` | An unrecognised attribute was used inside `#[...]`. | Check spelling against the supported attribute list. |
-| ``Unknown block attribute `X` `` | An unrecognised attribute was used inside `#![...]`. | Check spelling against the supported attribute list. |
-| ``Duplicate attribute `X` `` | The same attribute appears more than once in `#[...]` or `#![...]`. | Remove the duplicate. |
-| `` `max_iter` value must be greater than zero `` | `max_iter = 0` was specified. | Use a value of at least 1. |
-| `` `max_entry` value must be greater than zero `` | `max_entry = 0` was specified. | Use a value of at least 1. |
-| ``A state may only have one attribute block `#[...]` `` | A state has two or more `#[...]` blocks. | Merge all attributes into a single comma-separated `#[...]` block. |
-| ``Rule `X` cannot have an `!?` branch without a condition`` | A conditionless rule has a fallback branch. | Either add a condition to the rule or remove the `!?` block. |
-
----
-
 ## Known Limitations
 
-**Transitions are statement-level only.** `=> @state` must appear as a standalone statement inside a rule body or fallback branch. It cannot be used inside a nested block, closure, or `if` expression within a rule body. Use a top-level conditional rule instead.
+**Transitions cannot be used inside nested blocks or closures.** `=> @state` and `=> @state if condition` must appear as standalone statements inside a rule body or fallback branch. They cannot be used inside a nested `if`, closure, or other block within a rule body. For a single condition, use a guarded transition. For more complex branching, split the logic into separate conditional rules.
 
 ```rust
 // Does not work
 step? { if condition { => @other; } }
 
-// Works
+// Works: guarded transition handles the simple case
+step? { => @other if condition; }
+
+// Works: conditional rule handles anything else
 step ? condition { => @other; }
 ```
 

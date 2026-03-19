@@ -1,5 +1,0 @@
-error: Duplicate attribute `trace`
- --> tests/errors/duplicate_attribute.rs:5:18
-  |
-5 |         #[trace, trace]
-  |                  ^^^^^

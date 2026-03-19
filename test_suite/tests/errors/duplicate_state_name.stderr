@@ -1,4 +1,4 @@
-error: Duplicate state name `foo`
+error: Duplicate state name `foo`. Rename one of the states
  --> tests/errors/duplicate_state_name.rs:8:10
   |
 8 |         @foo

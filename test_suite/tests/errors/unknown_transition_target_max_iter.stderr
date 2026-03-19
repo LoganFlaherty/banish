@@ -1,4 +1,4 @@
-error: Unknown state transition `nowhere`
+error: Unknown state transition `nowhere`. Declare the state or fix the name
  --> tests/errors/unknown_transition_target_max_iter.rs:5:28
   |
 5 |         #[max_iter = 3 => @nowhere]

@@ -207,5 +207,19 @@ pub fn generate_stmt(stmt: &BanishStmt, input: &Block) -> proc_macro2::TokenStre
                 continue 'banish_main;
             }
         }
+        BanishStmt::GuardedStateTransition(transition, guard) => {
+            let target: usize = input.states
+                .iter()
+                .position(|state: &State| &state.name == transition)
+                .expect("Transition target not found. Should have been caught by validate_transition_targets");
+ 
+            let target: syn::Index = syn::Index::from(target);
+            quote! {
+                if #guard {
+                    __current_state = #target;
+                    continue 'banish_main;
+                }
+            }
+        }
     }
 }

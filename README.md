@@ -60,7 +60,7 @@ cargo add banish
 ## Why Banish?
 * **Fixed-Point Looping:** States automatically re-evaluate their rules until none of them fire, then advance.
 * **Flexible Transitions:** States advance implicitly in declaration order by default. Explicit `=> @state` transitions let you jump anywhere when you need to.
-* **Zero Runtime Overhead:** Banish is a procedural macro. It generates standard optimized Rust at compile time. No interpreter, no allocations, no virtual machine.
+* **Zero Runtime Overhead:** Leveraged as a procedural macro, it generates standard optimized Rust at compile time. No interpreter, no allocations, no virtual machine.
 * **Full Rust Integration:** Rule bodies are plain Rust. Closures, external crates, mutable references. Everything works as you'd expect.
 * **Self-Documenting Structure**: Named states and named rules make the shape of your logic readable at a glance, without requiring comments to explain what each block is doing.
 
@@ -138,6 +138,8 @@ The manual version requires you to declare the enum, wire up the entry counter, 
 
 **Explicit transitions** (`=> @state;`) jump to any named state immediately, bypassing the implicit scheduler.
 
+**Guarded transitions** (`=> @state if condition;`) jump to the named state only when the condition is true. If false, the statement is a no-op and execution continues in the rule body. Does not satisfy the exit requirement for isolated states or the final state.
+
 **Return values** (`return expr;`) exit the entire `banish!` block with a value. The block can be assigned to a variable or used as a function's return expression.
 
 **Early exit** (`break;` / `continue;`) work natively inside rule bodies against the generated fixed-point loop. `break` exits the current state and lets the scheduler advance normally. `continue` restarts rule evaluation from the top immediately.
@@ -212,8 +214,7 @@ RUST_LOG=trace cargo run -q 2> trace.log
 * The [Record Normalizer](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#record-normalizer) example is a multi-pass normalization pipeline demonstrated with fixed-point looping. Each rule independently checks whether its transformation is still needed, making the state self-stabilizing without manual loop management.
 * The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async]`, `.await`, `#[trace]`, external crate usage, and returning a tuple value from an async block.
 
-## Full Reference
-For a full treatment of every feature, attribute, and error, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
+For a full treatment of every feature and attribute, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 
 ## Contributing
 

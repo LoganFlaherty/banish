@@ -12,7 +12,7 @@ pub fn validate_state_and_rule_names(input: &Block) -> syn::Result<()> {
         if !state_names.insert(name.clone()) {
             return Err(syn::Error::new(
                 state.name.span(),
-                format!("Duplicate state name `{}`", name),
+                format!("Duplicate state name `{}`. Rename one of the states", name),
             ));
         }
 
@@ -23,7 +23,7 @@ pub fn validate_state_and_rule_names(input: &Block) -> syn::Result<()> {
                 return Err(syn::Error::new(
                     rule.name.span(),
                     format!(
-                        "Duplicate rule name `{}` in state `{}`",
+                        "Duplicate rule name `{}` in state `{}`. Rename one of the rules",
                         name, state.name
                     ),
                 ));
@@ -46,7 +46,7 @@ pub fn validate_transition_targets(input: &Block) -> syn::Result<()> {
         if !known.contains(&ident.to_string()) {
             Err(syn::Error::new(
                 ident.span(),
-                format!("Unknown state transition `{}`", ident),
+                format!("Unknown state transition `{}`. Declare the state or fix the name", ident),
             ))
         } else { Ok(()) }
     };
@@ -64,14 +64,18 @@ pub fn validate_transition_targets(input: &Block) -> syn::Result<()> {
         // Check all => @state transitions in rule bodies and else-bodies.
         for rule in &state.rules {
             for stmt in &rule.body {
-                if let BanishStmt::StateTransition(target) = stmt {
-                    check(target)?;
+                match stmt {
+                    BanishStmt::StateTransition(target) => check(target)?,
+                    BanishStmt::GuardedStateTransition(target, _) => check(target)?,
+                    _ => {}
                 }
             }
             if let Some(else_body) = &rule.else_body {
                 for stmt in else_body {
-                    if let BanishStmt::StateTransition(target) = stmt {
-                        check(target)?;
+                    match stmt {
+                        BanishStmt::StateTransition(target) => check(target)?,
+                        BanishStmt::GuardedStateTransition(target, _) => check(target)?,
+                        _ => {}
                     }
                 }
             }
@@ -101,7 +105,8 @@ pub fn validate_final_state_has_exit(input: &Block) -> syn::Result<()> {
             return Err(syn::Error::new(
                 state.name.span(),
                 format!(
-                    "Final state `{}` must have a return or state transition statement",
+                    "Final state `{}` must have a return or state transition statement. \
+                    Add `return` or `=> @state` to at least one rule",
                     state.name
                 ),
             ));
@@ -137,8 +142,8 @@ pub fn validate_isolated_states(input: &Block) -> syn::Result<()> {
             return Err(syn::Error::new(
                 state.name.span(),
                 format!(
-                    "Isolated state `{}` has no exit. Add a `return`, `=> @state` transition, \
-                     or `max_iter = N => @state` redirect",
+                    "Isolated state `{}` must have a return or state transition statement. \
+                    Add a `return`, `=> @state` transition, or `max_iter = N => @state` redirect",
                     state.name
                 ),
             ));

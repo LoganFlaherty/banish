@@ -1,4 +1,4 @@
-error: Unknown state transition `nowhere`
+error: Unknown state transition `nowhere`. Declare the state or fix the name
  --> tests/errors/unknown_transition_target_fallback.rs:6:39
   |
 6 |             step ? false { } !? { => @nowhere; }

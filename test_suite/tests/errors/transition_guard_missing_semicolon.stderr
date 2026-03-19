@@ -1,0 +1,5 @@
+error: unexpected end of input, Unexpected end of input, expected `;` after transition guard
+ --> tests/errors/transition_guard_missing_semicolon.rs:7:34
+  |
+7 |             step? { => @foo if x }
+  |                                  ^
