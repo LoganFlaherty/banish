@@ -179,6 +179,7 @@ banish! {
 | Attribute | Description |
 |---|---|
 | `async` | Expands the block to an `async move { ... }` expression. Required for `.await` inside rule bodies. The result must be `.await`ed by the caller. |
+| `id = "name"` | Sets a display name included in all `trace` output for this machine, emitted as `[banish:name]` instead of `[banish]`. Has no effect if no states use `#[trace]`. |
 
 ## Tracing
 

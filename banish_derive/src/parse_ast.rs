@@ -18,11 +18,15 @@ pub struct Block {
 /// * `async` expands the block to an `async move { ... }` expression instead
 ///   of an immediately invoked closure. The result is a `Future` and must be
 ///   `.await`ed. Required for using `.await` inside rule bodies.
+/// 
+/// * `id = "name"` — Sets a display name for this machine included in all
+///   `trace` output as `[banish:name]`. Has no effect if no states use `#[trace]`.
 ///
 /// Attributes can be combined freely: `#![async]`
 #[derive(Default)]
 pub struct BlockAttrs {
     pub is_async: bool,
+    pub id: Option<String>
 }
 
 pub struct State {
@@ -186,13 +190,25 @@ fn parse_block_attrs(content: &syn::parse::ParseBuffer) -> Result<BlockAttrs> {
             attrs.is_async = true;
         } else {
             let key: Ident = content.parse()?;
-            return Err(syn::Error::new(
-                key.span(),
-                format!(
-                    "Unknown block attribute `{}`. Expected attribute(s): `async`. Remove the duplicate",
-                    key
-                ),
-            ));
+            match key.to_string().as_str() {
+                "id" => {
+                    if attrs.id.is_some() {
+                        return Err(syn::Error::new(key.span(), "Duplicate attribute `id`. Remove the duplicate"));
+                    }
+                    content.parse::<Token![=]>()?;
+                    let lit: syn::LitStr = content.parse()?;
+                    attrs.id = Some(lit.value());
+                }
+                other => {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        format!(
+                            "Unknown block attribute `{}`. Expected attribute(s): `async`, `id`",
+                            other
+                        ),
+                    ));
+                }
+            }
         }
 
         // Consume optional trailing comma between attributes.

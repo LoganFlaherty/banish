@@ -14,6 +14,12 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
     isolated_indices: &[usize]) -> proc_macro2::TokenStream {
     let attrs: &crate::parse_ast::StateAttrs = &state.attrs;
 
+    // Build the trace prefix once: "[banish]" or "[banish:name]".
+    let trace_prefix: String = match &input.attrs.id {
+        Some(id) => format!("[banish:{}]", id),
+        None => "[banish]".to_string(),
+    };
+
     let rules = state.rules.iter().map(|func: &crate::parse_ast::Rule| {
         let rule_name: String = func.name.to_string();
         let body = func.body.iter().map(|stmt: &BanishStmt| generate_stmt(stmt, input));
@@ -27,8 +33,8 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
                     quote! {
                         let __cond = #condition;
                         ::banish::log::trace!(
-                            "[banish] rule `{}`: condition = {}",
-                            #rule_name, __cond
+                            "{} rule `{}`: condition = {}",
+                            #trace_prefix, #rule_name, __cond
                         );
                         if __cond {
                             __interaction = true;
@@ -48,8 +54,8 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
                     quote! {
                         let __cond = #condition;
                         ::banish::log::trace!(
-                            "[banish] rule `{}`: condition = {}",
-                            #rule_name, __cond
+                            "{} rule `{}`: condition = {}",
+                            #trace_prefix, #rule_name, __cond
                         );
                         if __cond {
                             __interaction = true;
@@ -70,7 +76,7 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
             if attrs.trace {
                 quote! {
                     if __first_iteration {
-                        ::banish::log::trace!("[banish] rule `{}`: unconditional (firing)", #rule_name);
+                        ::banish::log::trace!("{} rule `{}`: unconditional (firing)", #trace_prefix, #rule_name);
                         __interaction = true;
                         #(#body)*
                     }
@@ -124,7 +130,7 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
 
         let trace_entry: proc_macro2::TokenStream = if attrs.trace {
             let state_name: String = state.name.to_string();
-            quote! { ::banish::log::trace!("[banish] entering state `{}`", #state_name); }
+            quote! { ::banish::log::trace!("{} entering state `{}`", #trace_prefix, #state_name); }
         } else { quote! {} };
 
         quote! {

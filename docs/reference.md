@@ -361,7 +361,7 @@ Block attributes are declared at the top of a `banish!` block using inner attrib
  
 ```rust
 banish! {
-    #![async]
+    #![async, id = "fetcher"]
  
     @my_state
         ...
@@ -369,6 +369,8 @@ banish! {
 ```
  
 The `#![...]` line must appear before the first state declaration. Only one `#![...]` block is permitted per `banish!` invocation.
+
+**Combining with state attributes:** block attributes are independent of state-level attributes. Meaning they all work normally in any combination.
  
 ---
  
@@ -412,8 +414,33 @@ async fn main() {
     println!("Status: {}", status);
 }
 ```
- 
-**Combining with state attributes:** `#![async]` is independent of state-level attributes. Meaning they all work normally inside an async block.
+
+---
+
+### `id = "name"`
+
+Sets a display name for this machine that is included in all `trace` output. Without `id`, trace lines are prefixed with `[banish]`. With `id`, they are prefixed with `[banish:name]`.
+
+```rust
+banish! {
+    #![id = "lexer"]
+
+    #[trace]
+    @tokenize
+        next ? !done { advance(); }
+
+        finish ? done { return; }
+}
+```
+
+Output:
+```
+[banish:lexer] entering state `tokenize`
+[banish:lexer] rule `next`: condition = true
+[banish:lexer] rule `finish`: condition = false
+```
+
+This is most useful when multiple `banish!` blocks emit trace output in the same run. Without an `id`, their output is indistinguishable. `id` has no effect if no states in the block use `#[trace]`.
 
 ---
 
