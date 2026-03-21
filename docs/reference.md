@@ -8,13 +8,14 @@ This document is the full technical reference for Banish. For a quick introducti
 1. [Execution Model](#execution-model)
 2. [States](#states)
 3. [Rules](#rules)
-4. [Transitions](#transitions)
-5. [Return Values](#return-values)
-6. [State Attributes](#state-attributes)
-7. [Block Attributes](#block-attributes)
-8. [Examples](#examples)
-9. [Error Reference](#error-reference)
-10. [Known Limitations](#known-limitations)
+4. [Variables](#variables)
+5. [Transitions](#transitions)
+6. [Return Values](#return-values)
+7. [State Attributes](#state-attributes)
+8. [Block Attributes](#block-attributes)
+9. [Function Attributes](#function-attributes)
+10. [Examples](#examples)
+11. [Known Limitations](#known-limitations)
 
 ---
 
@@ -485,6 +486,76 @@ This is most useful when multiple `banish!` blocks emit trace output in the same
 
 ---
 
+## Function Attributes
+ 
+Function attributes are declared on `fn` items using outer attribute syntax and modify how the function interacts with its `banish!` block. They are distinct from block attributes, which are written inside the `banish!` block with `#![...]`.
+ 
+---
+ 
+### `#[banish::machine]`
+ 
+A setup attribute that reduces boilerplate for functions whose body contains a `banish!` block. It does two things automatically:
+ 
+**Injects `async` into the block attribute** when applied to an `async fn`, so `#![async]` does not need to be written manually. Writing it explicitly is also fine. The attribute detects it and skips injection.
+ 
+**Sets `id` to the function name** so trace output is labelled without any extra boilerplate. Can be overridden by writing `#![id = "name"]` inside the `banish!` block explicitly.
+ 
+Neither injection happens if the corresponding attribute is already present. `#[banish::machine]` is purely additive.
+ 
+```rust
+// Before
+#[tokio::main]
+async fn normalizer() {
+    banish! {
+        #![async, id = "normalizer"]
+ 
+        @process
+            step? { do_work().await; return; }
+    }
+}
+ 
+// After
+#[banish::machine]
+#[tokio::main]
+async fn normalizer() {
+    banish! {
+        @process
+            step? { do_work().await; return; }
+    }
+}
+```
+ 
+**`.await` is also injected automatically.** When the function is async, `#[banish::machine]` appends `.await` to the `banish!` expression so the generated future is driven to completion. If `.await` is already written explicitly it is left alone.
+ 
+**Attribute ordering.** `#[banish::machine]` must come before any runtime attribute such as `#[tokio::main]`. Attributes apply top to bottom. `#[banish::machine]` must see the original `async fn` before the runtime transforms it, otherwise it cannot locate the `banish!` block.
+ 
+```rust
+#[banish::machine]  // must be first
+#[tokio::main]
+async fn main() {
+    banish! { ... }
+}
+```
+ 
+**Placement of `banish!`.** The `banish!` invocation can appear anywhere in the function body as a standalone statement, a tail expression, or a `let` binding:
+ 
+```rust
+#[banish::machine]
+#[tokio::main]
+async fn main() {
+    setup();
+    let result = banish! {
+        @grade
+            pass ? score >= 60 { return "pass"; } !? { return "fail"; }
+    };
+    println!("{}", result);
+}
+```
+ 
+**`#[banish::machine]` takes no arguments.** All block-level configuration belongs inside `#![...]` within the `banish!` block, exactly as it does without the attribute. The function attribute only handles the two injections described above.
+
+---
+
 ## Examples
 
 ### Traffic Lights
@@ -522,7 +593,11 @@ fn main() {
 }
 ```
 
-`@red` and `@green` each reach their fixed point once their timer rule stops firing. `@yellow`'s fallback branch transitions back to `@red` explicitly. Without this, fallback branches do not trigger re-evaluation. `max_entry = 2` ensures this machine only loops through all its states twice. Immediately returning on the third entry of `@red`.
+`@red` and `@green` each reach their fixed point once their timer rule stops firing.
+
+`@yellow`'s fallback branch transitions back to `@red` explicitly. Without this, fallback branches do not trigger re-evaluation.
+
+`max_entry = 2` ensures this machine only loops through all its states twice. Immediately returning on the third entry of `@red`.
 
 ---
 
@@ -578,66 +653,22 @@ fn main() {
 }
 ```
 
-`max_iter = 1` on each state caps the fixed-point loop to a single iteration. After `attack?` fires and `check_win` or `check_loss` has been evaluated, if neither returns, the iteration limit is exhausted and the redirect transitions to the opposing state.
+`max_iter = 1` on each state caps the fixed-point loop to a single iteration.
 
----
-
-### Record Normalizer
- 
-A multi-pass normalization pipeline demonstrated with fixed-point looping. Each rule independently checks whether its transformation is still needed, making the state self-stabilizing without manual loop management.
- 
-```rust
-use banish::banish;
- 
-fn main() {
-    banish! {
-        let mut records: Vec<String> = vec![
-            "  Alice  ".into(),
-            "bob".into(),
-            "  ALICE".into(),
-            "".into(),
-            "Charlie".into(),
-            "bob".into(),
-        ];
-
-        @normalize
-            trim ? records.iter().any(|r| r != r.trim()) {
-                records = records.into_iter().map(|r| r.trim().to_string()).collect();
-            }
- 
-            lowercase ? records.iter().any(|r| r != &r.to_lowercase()) {
-                records = records.into_iter().map(|r| r.to_lowercase()).collect();
-            }
- 
-            remove_empty ? records.iter().any(|r| r.is_empty()) {
-                records.retain(|r| !r.is_empty());
-            }
- 
-        @finalize
-            dedup? {
-                records.sort();
-                records.dedup();
-                println!("{:?}", records); // ["alice", "bob", "charlie"]
-                return;
-            }
-    }
-}
-```
- 
-`@normalize` re-evaluates until all three rules stop firing. Each pass that changes the data triggers another, converging when the records are fully trimmed, lowercased, and non-empty. `@finalize` sorts and deduplicates on a single conditionless pass, then returns.
+After `attack?` fires and `check_win` or `check_loss` has been evaluated, if neither returns, the iteration limit is exhausted and the redirect transitions to the opposing state.
  
 ---
 
 ### Async HTTP Fetch
 
-An async workflow that demonstrates `#![async, id = ""]`, `.await`, `#[trace]`, and returning a tuple value from an async block.
+An async workflow that demonstrates `#![async, id = ""]`, `.await`, `#[trace]`, and returning a tuple value from an async block. Pokemon data is fetched from the `pokeapi` and loaded into stucts to be accessed.
 
 ```toml
 [dependencies]
 banish = { version = "1.3.0", features = ["trace-logger"] }
-tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["json"] }
-serde = { version = "1", features = ["derive"] }
+tokio = { version = "1.50.0", features = ["full"] }
+reqwest = { version = "0.13.2", features = ["json"] }
+serde = { version = "1.0.288", features = ["derive"] }
 env_logger = "0.11.9"
 ```
 
@@ -717,7 +748,94 @@ async fn main() {
 }
 ```
 
-`#![async]` makes the block expand to an `async move { ... }` expression, which is why `.await` is valid inside rule bodies and why the block itself must be `.await`ed by the caller. `load_pokemon?` and `load_pokemon_moves?` are conditionless rules, so each fires exactly once per state entry in declaration order. `pokemon` is declared outside the block so it can be mutated by `load_pokemon?` and then read and returned by `load_pokemon_moves?`. `#[trace]` on `@fetch_pokemon` emits a log entry on state entry and before each rule evaluation.
+`#![async]` makes the block expand to an `async move { ... }` expression, which is why `.await` is valid inside rule bodies and why the block itself must be `.await`ed by the caller.
+
+`load_pokemon?` and `load_pokemon_moves?` are conditionless rules, so each fires exactly once per state entry in declaration order.
+
+`pokemon` is declared outside the block so it can be mutated by `load_pokemon?` and then read and returned by `load_pokemon_moves`.
+
+`#[trace]` on `@fetch_pokemon` emits a log entry on state entry and before each rule evaluation.
+
+---
+
+### Record Normalizer
+ 
+An async multi-pass normalization pipeline that demonstrates `#[banish::machine]` and an isolated error state. Records are loaded from a file asynchronously, normalized in place, and written back out. If the load fails, an isolated `@error` state handles the failure and exits cleanly.
+ 
+```toml
+[dependencies]
+banish = "1.3.0"
+tokio = { version = "1.50.0", features = ["full"] }
+```
+ 
+```rust
+use banish::banish;
+ 
+#[banish::machine]
+#[tokio::main]
+async fn main() {
+    banish! {
+        let mut records: Vec<String> = Vec::new();
+        let mut load_error: Option<String> = None;
+ 
+        @fetch
+            load? {
+                match tokio::fs::read_to_string("../records.txt").await {
+                    Ok(content) => {
+                        records = content.lines().map(str::to_string).collect();
+                    }
+                    Err(e) => {
+                        load_error = Some(e.to_string());
+                    }
+                }
+            }
+
+            // Transition is a standalone statement here because transitions
+            // cannot appear inside nested blocks such as match arms.
+            bail ? load_error.is_some() { => @error; }
+ 
+        @normalize
+            trim ? records.iter().any(|r| r != r.trim()) {
+                records = records.into_iter().map(|r| r.trim().to_string()).collect();
+            }
+ 
+            lowercase ? records.iter().any(|r| r != &r.to_lowercase()) {
+                records = records.into_iter().map(|r| r.to_lowercase()).collect();
+            }
+ 
+            remove_empty ? records.iter().any(|r| r.is_empty()) {
+                records.retain(|r| !r.is_empty());
+            }
+ 
+        @finalize
+            dedup? {
+                records.sort();
+                records.dedup();
+                let output = records.join("\n");
+                tokio::fs::write("../records_clean.txt", output).await.expect("Write failed");
+                println!("Wrote {} records to records_clean.txt", records.len());
+                return;
+            }
+ 
+        #[isolate]
+        @error
+            handle? {
+                eprintln!("Failed to load records: {}", load_error.unwrap());
+                return;
+            }
+    }
+}
+```
+ 
+`#[banish::machine]` injects `async` and `id = "normalize_records"` into the block attribute automatically, and drives the resulting future to completion with `.await`. Neither needs to be written by hand.
+ 
+`@fetch` loads the file and stores any error in `load_error` rather than transitioning directly from inside the match arm, which is not permitted.
+
+`bail` reads the flag and transitions to @error if it is set. This is the standard pattern for routing to an isolated state from within a conditionless rule that does async work.
+ 
+`@error` is isolated, so it is never entered by the implicit scheduler. It can only be reached via the explicit `=> @error` transition in `@fetch`. It must have a defined exit, in this case a `return`, because an isolated state with no exit is a compile error.
+ 
+`@normalize` re-evaluates until all three rules stop firing, converging when the records are fully trimmed, lowercased, and non-empty. `@finalize` sorts, deduplicates, and writes the result back to disk on a single conditionless pass, then returns.
 
 ---
 

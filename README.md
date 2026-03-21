@@ -184,6 +184,31 @@ banish! {
 | `async` | Expands the block to an `async move { ... }` expression. Required for `.await` inside rule bodies. The result must be `.await`ed by the caller. |
 | `id = "name"` | Sets a display name included in all `trace` output for this machine, emitted as `[banish:name]` instead of `[banish]`. Has no effect if no states use `#[trace]`. |
 
+## Function Attributes
+ 
+Function attributes are declared on `fn` items and modify how the function interacts with its `banish!` block.
+ 
+```rust
+#[banish::machine]
+async fn my_machine() {
+    banish! { ... }
+}
+```
+ 
+| Attribute | Description |
+|---|---|
+| `#[banish::machine]` | Setup attribute. Injects `async` into the block attribute when the function is `async`. Sets `id` to the function name for trace output. Both can be overridden by writing them explicitly inside `#![...]`. |
+ 
+**Attribute ordering.** `#[banish::machine]` must come before any runtime attribute such as `#[tokio::main]`. Attributes apply top to bottom, so `#[banish::machine]` must see the original function before the runtime transforms it:
+ 
+```rust
+#[banish::machine]  // runs first, sees the original async fn
+#[tokio::main]      // runs second, wraps the result in the runtime
+async fn main() {
+    banish! { ... }
+}
+```
+
 ## Tracing
 
 The `trace` attribute emits diagnostics through the [`log`](https://docs.rs/log) facade. The simplest way to enable it is `banish::init_trace`, available behind the `trace-logger` feature:
@@ -208,8 +233,8 @@ If you need full control over log routing or filtering, skip `init_trace` and in
 ## More Examples
 
 * The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#dragon-fight) example is a turn-based battle that demonstrates early return with a value, external crate usage, cycling transitions, and using the state attribute `max_iter` with the transition option.
-* The [Record Normalizer](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#record-normalizer) example is a multi-pass normalization pipeline demonstrated with fixed-point looping. Each rule independently checks whether its transformation is still needed, making the state self-stabilizing without manual loop management.
-* The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async, id = ""]`, `.await`, `#[trace]`, and returning a tuple value from an async block.
+* The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async, id = ""]`, `.await`, `#[trace]`, and returning a tuple value from an async block. Pokemon data is fetched from the `pokeapi` and loaded into stucts to be accessed.
+* The [Record Normalizer](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#record-normalizer) example is an async multi-pass normalization pipeline that demonstrates `#[banish::machine]` and an isolated error state. Records are loaded from a file asynchronously, normalized in place, and written back out. If the load fails, an isolated `@error` state handles the failure and exits cleanly.
 
 For a full treatment of every feature and attribute, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 
@@ -220,7 +245,7 @@ Contributions are welcome. Before opening a PR, please open a discussion first. 
 The test suite covers all documented behavior and edge cases. Run it locally before submitting:
 
 ```
-cargo test -- --include-ignored
+cargo test
 ```
 
-New behavior and edge cases should include corresponding tests.
+New behavior and edge cases should include corresponding tests. Note that when writing error tests, the first test run fails and writes the error output into a wip directory. Those should be inspected for accuracy and then moved to the errors directory. Following test runs should pass.
