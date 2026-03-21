@@ -90,7 +90,7 @@ async fn async_http_fetch_pokemon() {
             load_pokemon? {
                 let response = reqwest::get("https://pokeapi.co/api/v2/pokemon/charizard")
                     .await
-                    .expect("request failed");
+                    .expect("Request failed");
                 pokemon = Some(
                     response.json::<Pokemon>().await.expect("failed to parse pokemon")
                 );
@@ -99,7 +99,7 @@ async fn async_http_fetch_pokemon() {
             load_pokemon_moves? {
                 let response = reqwest::get("https://pokeapi.co/api/v2/pokemon/charizard")
                     .await
-                    .expect("request failed");
+                    .expect("Request failed");
                 let data = response.json::<PokemonMoves>().await.expect("failed to parse moves");
                 let moves: Vec<String> = data.moves
                     .iter()

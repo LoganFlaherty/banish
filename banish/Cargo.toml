@@ -11,3 +11,10 @@ keywords = ["state-machine", "dsl", "declarative", "proc-macro", "automata"]
 [dependencies]
 banish_derive = {path="../banish_derive"}
 log = "0.4.29"
+
+[dependencies.env_logger]
+version = "0.11.9"
+optional = true
+
+[features]
+trace-logger = ["env_logger"]

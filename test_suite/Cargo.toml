@@ -4,9 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-banish = { path = "../banish" }
+banish = { path = "../banish", features = ["trace-logger"] }
 rand = "0.10.0"
-env_logger = "0.11.9"
 trybuild = "1.0.116"
 serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.50.0", features = ["full"] }

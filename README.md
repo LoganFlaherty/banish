@@ -183,37 +183,30 @@ banish! {
 
 ## Tracing
 
-The `trace` attribute emits diagnostics through the [`log`](https://docs.rs/log) facade, giving you full control over where the output goes. `env_logger` is the simplest backend:
-
+The `trace` attribute emits diagnostics through the [`log`](https://docs.rs/log) facade. The simplest way to enable it is `banish::init_trace`, available behind the `trace-logger` feature:
+ 
 ```toml
 [dependencies]
-env_logger = "0.11.9"
+banish = { version = "1.x", features = ["trace-logger"] }
 ```
-
+ 
+Call it once at the start of `main`. Pass `Some("file path")` to write output to a file, or pass `None` to print to stderr:
+ 
 ```rust
 fn main() {
-    env_logger::init();
-    // ...
+    banish::init_trace(Some("trace.log")); // write to file
+    // banish::init_trace(None); // print to stderr
+    ...
 }
 ```
-
-Then run with `RUST_LOG=trace` to capture output:
-
-```powershell
-# PowerShell
-$env:RUST_LOG="trace"; cargo run -q 2> trace.log
-```
-
-```bash
-# bash / zsh
-RUST_LOG=trace cargo run -q 2> trace.log
-```
+ 
+If you need full control over log routing or filtering, skip `init_trace` and initialise any `log`-compatible backend directly instead. Banish emits all trace diagnostics through the `log` facade, so any backend will capture them.
 
 ## More Examples
 
 * The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#dragon-fight) example is a turn-based battle that demonstrates early return with a value, external crate usage, multi-state transitions, fallback branches, and using the state attribute `max_iter` with the transition option.
 * The [Record Normalizer](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#record-normalizer) example is a multi-pass normalization pipeline demonstrated with fixed-point looping. Each rule independently checks whether its transformation is still needed, making the state self-stabilizing without manual loop management.
-* The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async]`, `.await`, `#[trace]`, external crate usage, and returning a tuple value from an async block.
+* The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async]`, `.await`, `#[trace]`, external crate usage, tracing, and returning a tuple value from an async block.
 
 For a full treatment of every feature and attribute, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 

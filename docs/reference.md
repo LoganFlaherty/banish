@@ -310,48 +310,41 @@ In the traffic light example above, the machine exits after `@red` is entered a 
 
 ### `trace`
 
-Emits diagnostics via [`log::trace!`](https://docs.rs/log) on state entry and before each rule evaluation. Requires a `log`-compatible backend to capture output. Without one, diagnostics are silently discarded.
-
+Emits diagnostics via [`log::trace!`](https://docs.rs/log) on state entry and before each rule evaluation. Requires a backend to capture output. Without one, diagnostics are silently discarded.
+ 
 ```rust
 #[trace]
 @compute
     step_a ? x > 0  { x -= 1; }
-
+ 
     step_b ? x == 0 { return; }
 ```
-
+ 
 Output format:
 ```
 [banish] entering state `compute`
 [banish] rule `step_a`: condition = true
 [banish] rule `step_b`: condition = false
 ```
-
-[`env_logger`](https://docs.rs/env_logger) is the simplest backend. Add it to your `Cargo.toml`:
-
+ 
+The simplest way to enable trace output is `banish::init_trace`, available behind the `trace-logger` feature:
+ 
 ```toml
 [dependencies]
-env_logger = "0.11.9"
+banish = { version = "1.x", features = ["trace-logger"] }
 ```
-
-Initialize it at startup and run with `RUST_LOG=trace`:
-
+ 
+Call it once at the start of `main`. Pass `Some("file path")` to write output to a file, or pass `None` to print to stderr:
+ 
 ```rust
 fn main() {
-    env_logger::init();
+    banish::init_trace(Some("trace.log")); // write to file
+    // banish::init_trace(None); // print to stderr
     ...
 }
 ```
-
-```bash
-# bash / zsh
-RUST_LOG=trace cargo run -q 2> trace.log
-
-# PowerShell
-$env:RUST_LOG="trace"; cargo run -q 2> trace.log
-```
-
-`log` itself is re-exported from `banish` and does not need to be added as a separate dependency.
+ 
+**Custom backends:** If you need full control over log routing or filtering, skip `init_trace` and initialise any [`log`](https://docs.rs/log)-compatible backend directly. Banish emits all trace diagnostics through the `log` facade, so any backend will capture them. `log` is re-exported from `banish` and does not need to be added as a separate dependency.
 
 ---
 
@@ -588,10 +581,11 @@ fn main() {
 
 ### Async HTTP Fetch
 
-An async workflow that demonstrates `#![async]`, `.await`, `#[trace]`, external crate usage, and returning a tuple value from an async block. Requires `tokio`, `reqwest`, `serde`, and `env_logger`.
+An async workflow that demonstrates `#![async]`, `.await`, `#[trace]`, external crate usage, tracing, and returning a tuple value from an async block. Requires `tokio`, `reqwest`, `serde`, and `env_logger`.
 
 ```toml
 [dependencies]
+banish = { version = "1.3.0", features = ["trace-logger"] }
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
@@ -628,7 +622,7 @@ struct PokemonMoves {
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    banish::init_trace(Some("trace.log"));
     let mut pokemon: Option<Pokemon> = None;
 
     let (pokedata, moves) = banish! {
@@ -639,7 +633,7 @@ async fn main() {
             load_pokemon? {
                 let response = reqwest::get("https://pokeapi.co/api/v2/pokemon/charizard")
                     .await
-                    .expect("request failed");
+                    .expect("Request failed");
                 pokemon = Some(
                     response.json::<Pokemon>().await.expect("failed to parse pokemon")
                 );
@@ -648,7 +642,7 @@ async fn main() {
             load_pokemon_moves? {
                 let response = reqwest::get("https://pokeapi.co/api/v2/pokemon/charizard")
                     .await
-                    .expect("request failed");
+                    .expect("Request failed");
                 let data = response.json::<PokemonMoves>().await.expect("failed to parse moves");
                 let moves: Vec<String> = data.moves
                     .iter()
@@ -674,7 +668,7 @@ async fn main() {
 }
 ```
 
-`#![async]` makes the block expand to an `async move { ... }` expression, which is why `.await` is valid inside rule bodies and why the block itself must be `.await`ed by the caller. `load_pokemon?` and `load_pokemon_moves?` are conditionless rules, so each fires exactly once per state entry in declaration order. `pokemon` is declared outside the block so it can be mutated by `load_pokemon?` and then read and returned by `load_pokemon_moves?`. `#[trace]` on `@fetch_pokemon` emits a log entry on state entry and before each rule evaluation. Run with `$env:RUST_LOG="trace"; cargo run -q 2> trace.log` to capture output to a log file.
+`#![async]` makes the block expand to an `async move { ... }` expression, which is why `.await` is valid inside rule bodies and why the block itself must be `.await`ed by the caller. `load_pokemon?` and `load_pokemon_moves?` are conditionless rules, so each fires exactly once per state entry in declaration order. `pokemon` is declared outside the block so it can be mutated by `load_pokemon?` and then read and returned by `load_pokemon_moves?`. `#[trace]` on `@fetch_pokemon` emits a log entry on state entry and before each rule evaluation.
 
 ---
 

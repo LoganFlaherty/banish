@@ -56,15 +56,9 @@ pub struct State {
 ///
 /// * `trace` emits [`log::trace!`] diagnostics when the state is entered and
 ///   before each rule is evaluated, showing whether the rule condition fired.
-///   Requires a [`log`]-compatible backend; [`env_logger`] is the simplest option:
-///   ```rust,ignore
-///   // Run with logging enabled:
-///   // (bash / zsh) RUST_LOG=trace cargo run -q 2> trace.log
-///   // (Powershell) $env:RUST_LOG="trace"; cargo run -q 2> trace.log
-///   env_logger::init();
-///   ```
+///   Requires a [`log`]-compatible backend. banish::init_trace is provided.
 ///
-/// Attributes can be combined freely: `#[isolate, max_iter = 5, trace]`
+/// Attributes can be combined freely.
 #[derive(Default)]
 pub struct StateAttrs {
     pub isolate: bool,
@@ -85,8 +79,7 @@ pub struct Rule {
 pub enum BanishStmt {
     Rust(Stmt),
     StateTransition(Ident),
-    /// `=> @state if condition;` a conditional jump that does nothing if the
-    /// guard is false. Does not satisfy the exit requirement for isolated states
+    /// `=> @state if condition;` a conditional jump. Does not satisfy the exit requirement for isolated states
     /// or the final-state check.
     GuardedStateTransition(Ident, Expr)
 }
