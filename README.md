@@ -10,8 +10,9 @@ use banish::banish;
 
 // Will print all light colors twice
 fn main() {
-    let mut ticks: i32 = 0;
     banish! {
+        let mut ticks: i32 = 0; // Block variable
+
         // State attribute that triggers a return on the third entry
         #[max_entry = 2]
         @red // Defines the state: red
@@ -132,6 +133,8 @@ The manual version requires you to declare the enum, wire up the entry counter, 
 
 **Rules** (`name ? condition { body }`) fire when their condition is true. After firing, the state re-evaluates from the top. Once a full pass completes with no rules firing, the state has reached its fixed point and the machine advances.
 
+**Variables** (`let`) can be declared at block level before the first state, living for the entire machine lifetime and accessible from every state, or at state level before the first rule, re-initializing on every entry to that state. Both follow standard Rust `let` syntax.
+
 **Fallback branches** (`!? { body }`) run when the preceding rule's condition is false. Does not trigger re-evaluation on its own.
 
 **Conditionless rules** (`name ? { body }`) fire exactly once on the first pass of each state entry. Cannot have a fallback branch.
@@ -204,9 +207,9 @@ If you need full control over log routing or filtering, skip `init_trace` and in
 
 ## More Examples
 
-* The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#dragon-fight) example is a turn-based battle that demonstrates early return with a value, external crate usage, multi-state transitions, fallback branches, and using the state attribute `max_iter` with the transition option.
+* The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#dragon-fight) example is a turn-based battle that demonstrates early return with a value, external crate usage, cycling transitions, and using the state attribute `max_iter` with the transition option.
 * The [Record Normalizer](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#record-normalizer) example is a multi-pass normalization pipeline demonstrated with fixed-point looping. Each rule independently checks whether its transformation is still needed, making the state self-stabilizing without manual loop management.
-* The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async]`, `.await`, `#[trace]`, external crate usage, tracing, and returning a tuple value from an async block.
+* The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async, id = ""]`, `.await`, `#[trace]`, and returning a tuple value from an async block.
 
 For a full treatment of every feature and attribute, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 

@@ -66,11 +66,15 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let entry_state: usize = input.states.iter()
         .position(|s| !s.attrs.isolate)
         .unwrap_or(0);
+
+    // Block-level variable declarations, emitted before internal state variables.
+    let block_vars = input.vars.iter().map(|s| quote! { #s });
     
     let expanded: proc_macro2::TokenStream;
     if input.attrs.is_async {
         expanded = quote! {
             async move {
+                #(#block_vars)*
                 let mut __current_state: usize = #entry_state;
                 let mut __interaction: bool = false;
                 #(#entry_counters)*
@@ -85,6 +89,7 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     } else {
         expanded = quote! {
             (move || {
+                #(#block_vars)*
                 let mut __current_state: usize = #entry_state;
                 let mut __interaction: bool = false;
                 #(#entry_counters)*

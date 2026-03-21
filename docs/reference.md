@@ -126,6 +126,54 @@ A fallback branch runs when the rule's condition is `false`. Unlike the rule bod
 
 ---
 
+## Variables
+ 
+Plain Rust `let` declarations can be placed at two scopes: directly inside the `banish!` block before any state, or inside a state before any rules. Both follow standard Rust `let` syntax including type annotations and `let mut`.
+ 
+### Block-level
+ 
+Block-level declarations appear after the `#![...]` attribute block (if present) and before the first state. They are emitted inside the generated closure or async block and live for the entire lifetime of the machine, accessible from every state and rule.
+ 
+```rust
+banish! {
+    let mut count: u32 = 0;
+    let threshold = 10;
+ 
+    @accumulate
+        inc ? count < threshold { count += 1; }
+ 
+        done ? count >= threshold { return count; }
+}
+```
+ 
+Variables declared here behave identically to variables declared outside the block and captured by move, but keep the declaration co-located with the logic that uses it.
+
+### State-level
+ 
+State-level declarations appear after the `@name` line and before any rules. They are re-initialized on every entry to the state, making them suitable for per-pass scratch values that do not need to persist across entries.
+ 
+```rust
+banish! {
+    @process
+        let mut dirty = false;
+ 
+        check_a ? condition_a { dirty = true; }
+
+        check_b ? condition_b { dirty = true; }
+ 
+        flush ? dirty {
+            write_output();
+            return;
+    }
+}
+```
+ 
+If a value needs to persist across entries to the same state, declare it at block level instead.
+ 
+**Shadowing:** a state-level declaration with the same name as a block-level one is valid Rust and shadows the outer binding within that state's scope. The block-level variable is unaffected.
+
+---
+
 ## Transitions
 
 ### Implicit (Scheduler)
@@ -441,14 +489,15 @@ This is most useful when multiple `banish!` blocks emit trace output in the same
 
 ### Traffic Lights
 
-A simple state machine that demonstrates implicit state advancement, conditionless rules, fallback transitions, and using the state attribute `max_entry`.
+A simple state machine that demonstrates implicit and explicit state transition, block variables, conditionless rules, fallback branches, and using the state attribute `max_entry`.
 
 ```rust
 use banish::banish;
 
 fn main() {
-    let mut ticks: i32 = 0;
     banish! {
+        let mut ticks: i32 = 0;
+
         #[max_entry = 2]
         @red
             announce? {
@@ -479,7 +528,7 @@ fn main() {
 
 ### Dragon Fight
 
-A turn-based battle that demonstrates early return with a value, external crate usage, multi-state transitions, fallback branches, and using the state attribute `max_iter` with the transition option. Requires `rand`.
+A turn-based battle that demonstrates early return with a value, external crate usage, cycling transitions, and using the state attribute `max_iter` with the transition option.
 
 ```toml
 [dependencies]
@@ -491,13 +540,13 @@ use banish::banish;
 use rand::prelude::*;
 
 fn main() {
-    let mut rng = rand::rng();
-    let mut player_hp = 20;
-    let mut dragon_hp = 50;
-
     println!("\n==== Battle Start ====");
 
     let result: &str = banish! {
+        let mut rng = rand::rng();
+        let mut player_hp = 20;
+        let mut dragon_hp = 50;
+
         #[max_iter = 1 => @dragon_turn]
         @player_turn
             attack? {
@@ -541,16 +590,16 @@ A multi-pass normalization pipeline demonstrated with fixed-point looping. Each 
 use banish::banish;
  
 fn main() {
-    let mut records: Vec<String> = vec![
-        "  Alice  ".into(),
-        "bob".into(),
-        "  ALICE".into(),
-        "".into(),
-        "Charlie".into(),
-        "bob".into(),
-    ];
- 
     banish! {
+        let mut records: Vec<String> = vec![
+            "  Alice  ".into(),
+            "bob".into(),
+            "  ALICE".into(),
+            "".into(),
+            "Charlie".into(),
+            "bob".into(),
+        ];
+
         @normalize
             trim ? records.iter().any(|r| r != r.trim()) {
                 records = records.into_iter().map(|r| r.trim().to_string()).collect();
@@ -581,7 +630,7 @@ fn main() {
 
 ### Async HTTP Fetch
 
-An async workflow that demonstrates `#![async]`, `.await`, `#[trace]`, external crate usage, tracing, and returning a tuple value from an async block. Requires `tokio`, `reqwest`, `serde`, and `env_logger`.
+An async workflow that demonstrates `#![async, id = ""]`, `.await`, `#[trace]`, and returning a tuple value from an async block.
 
 ```toml
 [dependencies]
@@ -623,10 +672,10 @@ struct PokemonMoves {
 #[tokio::main]
 async fn main() {
     banish::init_trace(Some("trace.log"));
-    let mut pokemon: Option<Pokemon> = None;
-
     let (pokedata, moves) = banish! {
-        #![async]
+        #![async, id = "pokedata"]
+
+        let mut pokemon: Option<Pokemon> = None;
 
         #[trace]
         @fetch_pokemon

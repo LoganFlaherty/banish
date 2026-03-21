@@ -6,13 +6,13 @@ use rand::prelude::*;
 // the first attack, so the result is always "Defeat...".
 #[test]
 fn test_dragon_fight_completes() {
-    let mut rng = rand::rng();
-    let mut player_hp = 1;
-    let mut dragon_hp = 50;
-
     println!("BATTLE START");
 
     let result: &str = banish! {
+        let mut rng = rand::rng();
+        let mut player_hp = 1;
+        let mut dragon_hp = 50;
+
         #[max_iter = 1 => @dragon_turn]
         @player_turn
             attack? {

@@ -81,10 +81,10 @@ async fn async_http_fetch_pokemon() {
         moves: Vec<MoveEntry>,
     }
 
-    let mut pokemon: Option<Pokemon> = None;
-
     let (pokedata, moves) = banish! {
         #![async]
+
+        let mut pokemon: Option<Pokemon> = None;
 
         @fetch_pokemon
             load_pokemon? {

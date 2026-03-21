@@ -9,6 +9,7 @@ use syn::{
 pub struct Block {
     pub states: Vec<State>,
     pub attrs: BlockAttrs,
+    pub vars: Vec<Stmt>,
 }
 
 /// Parsed attributes that can be placed on a `banish!` block with `#![...]`.
@@ -26,12 +27,13 @@ pub struct Block {
 #[derive(Default)]
 pub struct BlockAttrs {
     pub is_async: bool,
-    pub id: Option<String>
+    pub id: Option<String>,
 }
 
 pub struct State {
     pub name: Ident,
     pub attrs: StateAttrs,
+    pub vars: Vec<Stmt>,
     pub rules: Vec<Rule>,
 }
 
@@ -103,10 +105,16 @@ impl Parse for Block {
             return Err(input.error("A block may only have one block attribute block `#![...]`"));
         }
 
+        // Parse any vars
+        let mut vars: Vec<Stmt> = Vec::new();
+        while input.peek(Token![let]) {
+            vars.push(input.parse()?);
+        }
+
         let mut states: Vec<State> = Vec::with_capacity(2);
         while !input.is_empty() { states.push(input.parse()?); }
 
-        Ok(Block { states, attrs })
+        Ok(Block { states, attrs, vars })
     }
 }
 
@@ -129,13 +137,19 @@ impl Parse for State {
         input.parse::<Token![@]>()?;
         let name: Ident = input.parse()?;
 
+        // Parse any vars
+        let mut vars: Vec<Stmt> = Vec::new();
+        while input.peek(Token![let]) {
+            vars.push(input.parse()?);
+        }
+
         // Parse rules until the next state (or its attribute block) or end of input
         let mut rules: Vec<Rule> = Vec::with_capacity(1);
         while !input.is_empty() && !input.peek(Token![@]) && !input.peek(Token![#]) {
             rules.push(input.parse()?);
         }
 
-        Ok(State { name, attrs, rules })
+        Ok(State { name, attrs, vars, rules })
     }
 }
 

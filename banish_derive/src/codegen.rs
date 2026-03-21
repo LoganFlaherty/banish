@@ -188,9 +188,11 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
     // The final non-isolated state never needs to advance the scheduler. Any
     // legitimate exit is via a user return or transition, which the validator
     // above enforces. All other states advance normally.
+    let state_vars = state.vars.iter().map(|s| quote! { #s });
     let index_lit: syn::Index = syn::Index::from(index);
     quote! {
         #index_lit => {
+            #(#state_vars)*
             #entry_guard
             #loop_body
             #scheduler_advance

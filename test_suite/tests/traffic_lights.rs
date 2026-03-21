@@ -4,8 +4,9 @@ use banish::banish;
 // max_entry = 2 on @red means the machine exits after two full red-green-yellow cycles.
 #[test]
 fn test_traffic_lights_completes() {
-    let mut ticks: i32 = 0;
     banish! {
+        let mut ticks: i32 = 0;
+
         #[max_entry = 2]
         @red
             announce ? {
