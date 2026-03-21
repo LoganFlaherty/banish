@@ -8,13 +8,14 @@ This document is the full technical reference for Banish. For a quick introducti
 1. [Execution Model](#execution-model)
 2. [States](#states)
 3. [Rules](#rules)
-4. [Transitions](#transitions)
-5. [Return Values](#return-values)
-6. [State Attributes](#state-attributes)
-7. [Block Attributes](#block-attributes)
-8. [Examples](#examples)
-9. [Error Reference](#error-reference)
-10. [Known Limitations](#known-limitations)
+4. [Variables](#variables)
+5. [Transitions](#transitions)
+6. [Return Values](#return-values)
+7. [State Attributes](#state-attributes)
+8. [Block Attributes](#block-attributes)
+9. [Examples](#examples)
+10. [Error Reference](#error-reference)
+11. [Known Limitations](#known-limitations)
 
 ---
 
