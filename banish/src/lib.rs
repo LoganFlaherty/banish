@@ -1,7 +1,10 @@
 //! Start with the reference's Execution Model section on onward.
 //! Add ,ignore to all rust code blocks.
 
-pub use banish_derive::{ banish, machine };
+mod banish_dispatch;
+
+pub use banish_derive::{ banish, machine, BanishDispatch };
+pub use banish_dispatch::BanishDispatch;
 pub use log;
 use std::fs::File;
 

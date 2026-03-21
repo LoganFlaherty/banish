@@ -13,9 +13,10 @@ This document is the full technical reference for Banish. For a quick introducti
 6. [Return Values](#return-values)
 7. [State Attributes](#state-attributes)
 8. [Block Attributes](#block-attributes)
-9. [Function Attributes](#function-attributes)
-10. [Examples](#examples)
-11. [Known Limitations](#known-limitations)
+9. [BanishDispatch](#banishdispatch)
+10. [Function Attributes](#function-attributes)
+11. [Examples](#examples)
+12. [Known Limitations](#known-limitations)
 
 ---
 
@@ -486,6 +487,104 @@ This is most useful when multiple `banish!` blocks emit trace output in the same
 
 ---
 
+### `dispatch(expr)`
+ 
+Sets the entry state dynamically at runtime by matching the variant name of `expr` against the declared state names. The entry state is no longer fixed at compile time. It is resolved on each invocation from the value of `expr`.
+ 
+```rust
+let entry = PipelineState::Validate;
+banish! {
+    #![dispatch(entry)]
+ 
+    @normalize
+        ...
+ 
+    @validate
+        ...
+ 
+    @finalize
+        done? { return; }
+}
+```
+ 
+The enum passed to `dispatch` must implement `BanishDispatch`, which maps each variant to its snake_case name as a `&'static str`. The simplest way to satisfy this is `#[derive(BanishDispatch)]`. See [BanishDispatch](#banishdispatch) for details.
+ 
+**Variant name matching** converts PascalCase variant names to snake_case and matches them against state names verbatim. `Normalize` matches `@normalize`, `FetchPokemon` matches `@fetch_pokemon`, and so on. Passing a variant whose converted name does not match any declared state is a runtime panic.
+ 
+**Variants with data** are supported. The data is ignored. Only the variant name is used for dispatch. If you need the data, extract it before the block:
+ 
+```rust
+let payload = match &entry {
+    PipelineState::Resume(data) => Some(data),
+    _ => None,
+};
+ 
+banish! {
+    #![dispatch(entry)]
+    ...
+}
+```
+ 
+**Combining with other block attributes** works normally. `dispatch` can appear alongside `async` and `id` in the same `#![...]` line:
+ 
+```rust
+banish! {
+    #![async, id = "pipeline", dispatch(entry)]
+    ...
+}
+```
+
+---
+
+## BanishDispatch
+ 
+`BanishDispatch` is a trait used by `#![dispatch(expr)]` to resolve a variant name at runtime. It has a single method:
+ 
+```rust
+pub trait BanishDispatch {
+    fn variant_name(&self) -> &'static str;
+}
+```
+ 
+`variant_name` returns the snake_case name of the current variant as a `&'static str`. The return type is static so there is no allocation on dispatch.
+ 
+### Deriving
+ 
+`#[derive(BanishDispatch)]` generates the implementation automatically. All variant kinds are supported. Unit, tuple, and struct variants all produce the correct name. Data fields are ignored.
+ 
+```rust
+use banish::BanishDispatch;
+ 
+#[derive(BanishDispatch)]
+enum PipelineState {
+    Normalize,
+    Validate,
+    Finalize,
+    Resume(CheckpointData),   // data is ignored, name still matches @resume
+}
+```
+ 
+### Manual Implementation
+ 
+If you need custom naming or are not using the derive macro:
+ 
+```rust
+impl BanishDispatch for PipelineState {
+    fn variant_name(&self) -> &'static str {
+        match self {
+            PipelineState::Normalize => "normalize",
+            PipelineState::Validate => "validate",
+            PipelineState::Finalize => "finalize",
+            PipelineState::Resume(_) => "resume",
+        }
+    }
+}
+```
+ 
+The returned string must match a declared state name exactly. Returning a name that does not match any state causes a runtime panic on dispatch.
+
+---
+
 ## Function Attributes
  
 Function attributes are declared on `fn` items using outer attribute syntax and modify how the function interacts with its `banish!` block. They are distinct from block attributes, which are written inside the `banish!` block with `#![...]`.
@@ -836,6 +935,196 @@ async fn main() {
 `@error` is isolated, so it is never entered by the implicit scheduler. It can only be reached via the explicit `=> @error` transition in `@fetch`. It must have a defined exit, in this case a `return`, because an isolated state with no exit is a compile error.
  
 `@normalize` re-evaluates until all three rules stop firing, converging when the records are fully trimmed, lowercased, and non-empty. `@finalize` sorts, deduplicates, and writes the result back to disk on a single conditionless pass, then returns.
+
+---
+
+### Order Processing Pipeline
+ 
+A resumable order processing pipeline that demonstrates `#![dispatch(...)]`, `BanishDispatch`, a state-level variable, a guarded transition to an isolated error state.
+ 
+```rust
+use banish::banish;
+use banish::BanishDispatch;
+ 
+#[derive(BanishDispatch)]
+enum OrderStage {
+    Validate,
+    ApplyDiscounts,
+    Finalize,
+}
+ 
+struct LineItem {
+    name: &'static str,
+    quantity: u32,
+    unit_price_cents: u32,
+}
+ 
+struct Order {
+    id: &'static str,
+    customer: &'static str,
+    items: Vec<LineItem>,
+    coupon: Option<&'static str>,
+}
+ 
+fn process_order(order: Order, resume_from: OrderStage) {
+    banish! {
+        #![dispatch(resume_from)]
+ 
+        let subtotal_cents: u32 = order.items.iter()
+            .map(|i| i.quantity * i.unit_price_cents)
+            .sum();
+        let mut total_cents: u32 = subtotal_cents;
+        let mut discount_cents: u32 = 0;
+        let mut rejected: Option<&str> = None;
+ 
+        // Validate that every line item has a non-zero quantity and price.
+        // Uses a state-level variable to track which item is currently being
+        // checked so the rule can scan one item per pass.
+        @validate
+            let mut idx: usize = 0;
+ 
+            check ? idx < order.items.len() {
+                let item = &order.items[idx];
+                if item.quantity == 0 || item.unit_price_cents == 0 {
+                    rejected = Some(item.name);
+                }
+                idx += 1;
+            }
+ 
+            // Jump to @rejected if any item failed validation, otherwise
+            // fall through to @apply_discounts normally.
+            route? {
+                => @rejected if rejected.is_some();
+            }
+ 
+        @apply_discounts
+            // Apply a flat 10% loyalty discount for orders over $100.
+            loyalty? {
+                if subtotal_cents >= 10_000 {
+                    let loyalty_discount = subtotal_cents / 10;
+                    discount_cents += loyalty_discount;
+                    println!("  Loyalty discount: -${:.2}", loyalty_discount as f64 / 100.0);
+                }
+            }
+ 
+            // Apply coupon. "SAVE20" takes 20% off, "FIVE" takes $5 off.
+            coupon? {
+                if let Some(code) = order.coupon {
+                    let savings = match code {
+                        "SAVE20" => subtotal_cents / 5,
+                        "FIVE" => 500_u32.min(subtotal_cents),
+                        other => { println!("  Unknown coupon: {}", other); 0 }
+                    };
+                    discount_cents += savings;
+                    println!("  Coupon {}: -${:.2}", code, savings as f64 / 100.0);
+                }
+            }
+ 
+            apply? {
+                total_cents = subtotal_cents.saturating_sub(discount_cents);
+            }
+ 
+        @finalize
+            receipt? {
+                println!("\n  Order {}  --  {}", order.id, order.customer);
+                println!("  ----------------------------------------");
+                for item in &order.items {
+                    let line = item.quantity * item.unit_price_cents;
+                    println!(
+                        "  {:<20} x{}  ${:.2}",
+                        item.name, item.quantity, line as f64 / 100.0
+                    );
+                }
+                println!("  ----------------------------------------");
+                if discount_cents > 0 {
+                    println!("  Subtotal:              ${:.2}", subtotal_cents as f64 / 100.0);
+                    println!("  Discounts:            -${:.2}", discount_cents as f64 / 100.0);
+                }
+                println!("  Total:                 ${:.2}", total_cents as f64 / 100.0);
+                return;
+            }
+ 
+        #[isolate]
+        @rejected
+            handle? {
+                eprintln!(
+                    "\n  Order {} rejected: invalid line item {:?}",
+                    order.id,
+                    rejected.unwrap()
+                );
+                return;
+            }
+    }
+}
+ 
+fn main() {
+    println!("=== Full pipeline ===");
+    process_order(
+        Order {
+            id: "ORD-001",
+            customer: "Alice",
+            items: vec![
+                LineItem { name: "Mechanical Keyboard", quantity: 1, unit_price_cents: 8999 },
+                LineItem { name: "USB-C Cable", quantity: 3, unit_price_cents:  999 },
+                LineItem { name: "Desk Mat", quantity: 1, unit_price_cents: 2499 },
+            ],
+            coupon: Some("SAVE20"),
+        },
+        OrderStage::Validate,
+    );
+ 
+    println!("\n=== Resume from ApplyDiscounts (validation already passed) ===");
+    process_order(
+        Order {
+            id: "ORD-002",
+            customer: "Bob",
+            items: vec![
+                LineItem { name: "Monitor", quantity: 1, unit_price_cents: 29999 },
+                LineItem { name: "HDMI Cable", quantity: 2, unit_price_cents:  1499 },
+            ],
+            coupon: Some("FIVE"),
+        },
+        OrderStage::ApplyDiscounts,
+    );
+ 
+    println!("\n=== Invalid order (zero quantity) ===");
+    process_order(
+        Order {
+            id: "ORD-003",
+            customer: "Charlie",
+            items: vec![
+                LineItem { name: "Webcam", quantity: 0, unit_price_cents: 5999 },
+                LineItem { name: "Headset", quantity: 1, unit_price_cents: 7999 },
+            ],
+            coupon: None,
+        },
+        OrderStage::Validate,
+    );
+ 
+    println!("\n=== Jump straight to Finalize ===");
+    process_order(
+        Order {
+            id: "ORD-004",
+            customer: "Diana",
+            items: vec![
+                LineItem { name: "Mousepad", quantity: 1, unit_price_cents: 1999 },
+            ],
+            coupon: None,
+        },
+        OrderStage::Finalize,
+    );
+}
+```
+ 
+`#![dispatch(resume_from)]` selects the entry state at runtime from the `OrderStage` variant passed in. `#[derive(BanishDispatch)]` generates the `variant_name` implementation that maps each variant to its snake_case state name with no runtime allocation. `OrderStage::ApplyDiscounts` maps to `"apply_discounts"`, which matches `@apply_discounts` directly.
+ 
+`@validate` uses a state-level `idx` to scan one item per pass. Because `idx` is declared at state level it resets to zero on every entry, making the scan restartable. The `route?` rule uses a guarded transition to jump to the isolated `@rejected` state if any item failed -- because `rejected` is set inside a nested `if` block, the transition must be a separate standalone rule rather than inside the `check` body.
+ 
+`@apply_discounts` uses conditionless rules for `loyalty?`, `coupon?`, and `apply?`. Each needs to fire exactly once regardless of the result, so a conditionless rule is the right shape. A conditional rule would loop indefinitely because the conditions (`subtotal_cents >= 10_000`, `order.coupon.is_some()`) never change between passes.
+ 
+`@rejected` is isolated, so it is never entered by the implicit scheduler. It can only be reached via the explicit `=> @rejected` transition in `route?`.
+ 
+The four calls in `main` exercise every dispatch entry point and both exit paths. `@finalize` for success and `@rejected` for the invalid order.
 
 ---
 

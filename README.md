@@ -183,6 +183,38 @@ banish! {
 |---|---|
 | `async` | Expands the block to an `async move { ... }` expression. Required for `.await` inside rule bodies. The result must be `.await`ed by the caller. |
 | `id = "name"` | Sets a display name included in all `trace` output for this machine, emitted as `[banish:name]` instead of `[banish]`. Has no effect if no states use `#[trace]`. |
+| `dispatch(expr)` | Sets the entry state dynamically at runtime from an enum value. The enum must derive `BanishDispatch`. Variant names are matched to state names by converting PascalCase to snake_case. |
+ 
+## Dispatch
+ 
+`#![dispatch(expr)]` replaces the fixed entry state with a runtime lookup. The enum must derive `BanishDispatch`, which generates a zero-allocation `variant_name` implementation mapping each variant to its snake_case state name.
+ 
+```rust
+use banish::BanishDispatch;
+ 
+#[derive(BanishDispatch)]
+enum PipelineState {
+    Normalize,
+    Validate,
+    Finalize,
+}
+ 
+let entry = PipelineState::Validate;
+banish! {
+    #![dispatch(entry)]
+ 
+    @normalize
+        ...
+ 
+    @validate
+        ...
+ 
+    @finalize
+        done? { return; }
+}
+```
+ 
+`PipelineState::Validate` maps to `"validate"` which matches `@validate`, so the machine enters there directly. Variants with data fields are supported. The data is ignored and only the variant name is used for dispatch. Passing a variant whose name does not match any state is a runtime panic.
 
 ## Function Attributes
  
@@ -235,6 +267,7 @@ If you need full control over log routing or filtering, skip `init_trace` and in
 * The [Dragon Fight](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#dragon-fight) example is a turn-based battle that demonstrates early return with a value, external crate usage, cycling transitions, and using the state attribute `max_iter` with the transition option.
 * The [Async HTTP Fetch](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#async-http-fetch) example is an async workflow that demonstrates `#![async, id = ""]`, `.await`, `#[trace]`, and returning a tuple value from an async block. Pokemon data is fetched from the `pokeapi` and loaded into stucts to be accessed.
 * The [Record Normalizer](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#record-normalizer) example is an async multi-pass normalization pipeline that demonstrates `#[banish::machine]` and an isolated error state. Records are loaded from a file asynchronously, normalized in place, and written back out. If the load fails, an isolated `@error` state handles the failure and exits cleanly.
+* The [Order Processing Pipeline](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#order-processing-pipeline) example is a resumable order processing pipeline that demonstrates `#![dispatch(...)]`, `BanishDispatch`, state-level variables, guarded transitions, and conditionless rules. Orders can be resumed from any stage by dispatching into the pipeline with the appropriate `OrderStage` variant.
 
 For a full treatment of every feature and attribute, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 

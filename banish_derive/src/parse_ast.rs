@@ -28,6 +28,7 @@ pub struct Block {
 pub struct BlockAttrs {
     pub is_async: bool,
     pub id: Option<String>,
+    pub dispatch: Option<proc_macro2::TokenStream>,
 }
 
 pub struct State {
@@ -205,6 +206,21 @@ fn parse_block_attrs(content: &syn::parse::ParseBuffer) -> Result<BlockAttrs> {
                     content.parse::<Token![=]>()?;
                     let lit: syn::LitStr = content.parse()?;
                     attrs.id = Some(lit.value());
+                }
+                "dispatch" => {
+                    if attrs.dispatch.is_some() {
+                        return Err(syn::Error::new(key.span(), "Duplicate attribute `dispatch`. Remove the duplicate"));
+                    }
+                    let inner: syn::parse::ParseBuffer<'_>;
+                    syn::parenthesized!(inner in content);
+                    let mut dispatch_tokens: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
+                    while !inner.is_empty() {
+                        dispatch_tokens.extend(std::iter::once(inner.parse::<TokenTree>()?));
+                    }
+                    if dispatch_tokens.is_empty() {
+                        return Err(syn::Error::new(key.span(), "`dispatch` requires an expression: `dispatch(expr)`"));
+                    }
+                    attrs.dispatch = Some(dispatch_tokens);
                 }
                 other => {
                     return Err(syn::Error::new(
