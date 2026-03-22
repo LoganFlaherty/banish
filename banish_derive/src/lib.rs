@@ -249,9 +249,14 @@ pub fn machine(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> 
 /// `Normalize` -> `normalize`
 fn pascal_to_snake(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 4);
-    for (i, ch) in s.chars().enumerate() {
+    let chars: Vec<char> = s.chars().collect();
+    for (i, &ch) in chars.iter().enumerate() {
         if ch.is_uppercase() && i != 0 {
-            out.push('_');
+            let prev_lower = chars[i - 1].is_lowercase();
+            let next_lower = chars.get(i + 1).map_or(false, |c| c.is_lowercase());
+            if prev_lower || (chars[i - 1].is_uppercase() && next_lower) {
+                out.push('_');
+            }
         }
         out.extend(ch.to_lowercase());
     }
