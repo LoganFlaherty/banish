@@ -94,7 +94,7 @@ pub fn validate_final_state_has_exit(input: &Block) -> syn::Result<()> {
             let check_stmts = |stmts: &Vec<BanishStmt>| stmts.iter()
                 .any(|stmt: &BanishStmt| match stmt {
                     BanishStmt::StateTransition(_) => true,
-                    BanishStmt::Rust(Stmt::Expr(Expr::Return(_), _)) => true,
+                    BanishStmt::Rust(Stmt::Expr(expr, _)) => expr_has_return(expr),
                     _ => false,
                 });
             check_stmts(&rule.body)
@@ -129,7 +129,7 @@ pub fn validate_isolated_states(input: &Block) -> syn::Result<()> {
             let check_stmts = |stmts: &Vec<BanishStmt>| stmts.iter()
                 .any(|stmt: &BanishStmt| match stmt {
                     BanishStmt::StateTransition(_) => true,
-                    BanishStmt::Rust(Stmt::Expr(Expr::Return(_), _)) => true,
+                    BanishStmt::Rust(Stmt::Expr(expr, _)) => expr_has_return(expr),
                     _ => false,
                 });
             check_stmts(&rule.body)
@@ -145,6 +145,86 @@ pub fn validate_isolated_states(input: &Block) -> syn::Result<()> {
                     "Isolated state `{}` must have a return or state transition statement. \
                     Add a `return`, `=> @state` transition, or `max_iter = N => @state` redirect",
                     state.name
+                ),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Recursively checks whether a Rust expression contains a `return` anywhere
+/// reachable without crossing a loop or closure boundary, since those create
+/// their own control flow scopes.
+fn expr_has_return(expr: &Expr) -> bool {
+    match expr {
+        Expr::Return(_) => true,
+        Expr::If(e) => {
+            block_has_return(&e.then_branch)
+                || e.else_branch.as_ref().map_or(false, |(_, eb)| expr_has_return(eb))
+        }
+        Expr::Block(e) => block_has_return(&e.block),
+        Expr::Match(e) => e.arms.iter().any(|arm| expr_has_return(&arm.body)),
+        _ => false,
+    }
+}
+
+fn block_has_return(block: &syn::Block) -> bool {
+    block.stmts.iter().any(|stmt| match stmt {
+        Stmt::Expr(expr, _) => expr_has_return(expr),
+        _ => false,
+    })
+}
+
+/// Recursively checks whether a Rust expression contains a `break` anywhere
+/// reachable without crossing a loop or closure boundary. A `break` inside a
+/// user-written `for` or `loop` block breaks that inner loop, not the state
+/// loop, so those boundaries are not descended into.
+fn expr_has_break(expr: &Expr) -> bool {
+    match expr {
+        Expr::Break(_) => true,
+        Expr::If(e) => {
+            block_has_break(&e.then_branch)
+                || e.else_branch.as_ref().map_or(false, |(_, eb)| expr_has_break(eb))
+        }
+        Expr::Block(e) => block_has_break(&e.block),
+        Expr::Match(e) => e.arms.iter().any(|arm| expr_has_break(&arm.body)),
+        _ => false,
+    }
+}
+
+fn block_has_break(block: &syn::Block) -> bool {
+    block.stmts.iter().any(|stmt| match stmt {
+        Stmt::Expr(expr, _) => expr_has_break(expr),
+        _ => false,
+    })
+}
+
+/// Validates that no rule in the final non-isolated state uses `break`.
+///
+/// `break` exits the fixed-point loop and falls through to the scheduler
+/// advance, which increments `__current_state` past the last valid index
+/// and hits `unreachable!()` at runtime. In the final state the only valid
+/// exits are `return` and `=> @state`.
+pub fn validate_no_break_in_final_state(input: &Block) -> syn::Result<()> {
+    let Some(state) = input.states.iter().rev().find(|s: &&crate::parse_ast::State| !s.attrs.isolate)
+        else { return Ok(()); };
+
+    for rule in &state.rules {
+        let check_stmts = |stmts: &Vec<BanishStmt>| stmts.iter()
+            .any(|stmt: &BanishStmt| match stmt {
+                BanishStmt::Rust(Stmt::Expr(expr, _)) => expr_has_break(expr),
+                _ => false,
+            });
+
+        if check_stmts(&rule.body) || rule.else_body.as_ref().map_or(false, check_stmts) {
+            return Err(syn::Error::new(
+                rule.name.span(),
+                format!(
+                    "Rule `{}` in final state `{}` uses `break`, which exits the \
+                    fixed-point loop and advances past the last valid state index, \
+                    causing a runtime panic. Use `return` or `=> @state` instead",
+                    rule.name, state.name
                 ),
             ));
         }

@@ -17,7 +17,8 @@ mod machine;
 use parse_ast::Block;
 use validate::{
     validate_state_and_rule_names, validate_transition_targets,
-    validate_final_state_has_exit, validate_isolated_states
+    validate_final_state_has_exit, validate_isolated_states,
+    validate_no_break_in_final_state
 };
 use codegen::{ entry_counter_ident, generate_state };
 use machine::machine_handler;
@@ -41,6 +42,9 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         return err.to_compile_error().into();
     }
     if let Err(err) = validate_isolated_states(&input) {
+        return err.to_compile_error().into();
+    }
+    if let Err(err) = validate_no_break_in_final_state(&input) {
         return err.to_compile_error().into();
     }
 
@@ -249,14 +253,9 @@ pub fn machine(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> 
 /// `Normalize` -> `normalize`
 fn pascal_to_snake(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 4);
-    let chars: Vec<char> = s.chars().collect();
-    for (i, &ch) in chars.iter().enumerate() {
+    for (i, ch) in s.chars().enumerate() {
         if ch.is_uppercase() && i != 0 {
-            let prev_lower = chars[i - 1].is_lowercase();
-            let next_lower = chars.get(i + 1).map_or(false, |c| c.is_lowercase());
-            if prev_lower || (chars[i - 1].is_uppercase() && next_lower) {
-                out.push('_');
-            }
+            out.push('_');
         }
         out.extend(ch.to_lowercase());
     }
