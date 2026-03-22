@@ -19,11 +19,18 @@ pub struct Block {
 /// * `async` expands the block to an `async move { ... }` expression instead
 ///   of an immediately invoked closure. The result is a `Future` and must be
 ///   `.await`ed. Required for using `.await` inside rule bodies.
-/// 
-/// * `id = "name"` — Sets a display name for this machine included in all
+///
+/// * `id = "name"` sets a display name for this machine included in all
 ///   `trace` output as `[banish:name]`. Has no effect if no states use `#[trace]`.
 ///
-/// Attributes can be combined freely: `#![async]`
+/// * `dispatch(expr)` sets the entry state dynamically at runtime from an enum
+///   value. The enum must derive `BanishDispatch`. Variant names are matched to
+///   state names by converting PascalCase to snake_case.
+///
+/// * `trace` enables trace diagnostics on every state in the block. Equivalent
+///   to placing `#[trace]` on each state individually.
+///
+/// Attributes can be combined freely: `#![async, id = "name", dispatch(expr), trace]`
 #[derive(Default)]
 pub struct BlockAttrs {
     pub is_async: bool,
@@ -233,7 +240,7 @@ fn parse_block_attrs(content: &syn::parse::ParseBuffer) -> Result<BlockAttrs> {
                     return Err(syn::Error::new(
                         key.span(),
                         format!(
-                            "Unknown block attribute `{}`. Expected attribute(s): `async`, `id`",
+                            "Unknown block attribute `{}`. Expected attribute(s): `async`, `id`, `dispatch`, `trace`",
                             other
                         ),
                     ));

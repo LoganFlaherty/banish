@@ -210,7 +210,7 @@ pub fn derive_banish_dispatch(input: proc_macro::TokenStream) -> proc_macro::Tok
 
 /// Setup attribute for functions whose body contains a `banish! { }` block.
 ///
-/// `#[banish::machine]` takes no arguments and does two things automatically:
+/// `#[banish::machine]` takes no arguments and does three things automatically:
 ///
 /// * Sets `id` in the block attribute to the function name, so trace output is
 ///   labelled without any extra boilerplate. Can be overridden by writing

@@ -613,13 +613,15 @@ Function attributes are declared on `fn` items using outer attribute syntax and 
  
 ### `#[banish::machine]`
  
-A setup attribute that reduces boilerplate for functions whose body contains a `banish!` block. It does two things automatically:
+A setup attribute that reduces boilerplate for functions whose body contains a `banish!` block. It does three things automatically:
  
 **Injects `async` into the block attribute** when applied to an `async fn`, so `#![async]` does not need to be written manually. Writing it explicitly is also fine. The attribute detects it and skips injection.
+
+**Injects `.await` on the `banish!` expression** when the function is async, so the future produced by `#![async]` is driven to completion automatically. If `.await` is already present it is left alone.
  
 **Sets `id` to the function name** so trace output is labelled without any extra boilerplate. Can be overridden by writing `#![id = "name"]` inside the `banish!` block explicitly.
  
-Neither injection happens if the corresponding attribute is already present. `#[banish::machine]` is purely additive.
+Injections don't happen if the corresponding item is already present. `#[banish::machine]` is purely additive.
  
 ```rust
 // Before
