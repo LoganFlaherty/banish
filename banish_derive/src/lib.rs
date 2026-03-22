@@ -1,7 +1,8 @@
 //! # Banish
-//! Banish is a declarative DSL for building rule-based state machines in Rust.
-//! States evaluate their rules until reaching a fixed point or triggering a transition,
-//! reducing control flow boilerplate.
+//! Banish is a declarative framework for rule-based state machines. 
+//! Declare states and rules, and the framework handles scheduling, 
+//! fixed-point evaluation, and transitions. You write the **what**, not the **how**.
+//! 
 //! This is the macro implementation for the `banish` crate, which provides the public API
 //! and user-facing documentation.
 
