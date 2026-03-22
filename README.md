@@ -11,18 +11,18 @@ use banish::banish;
 // Will print all light colors twice
 fn main() {
     banish! {
-        let mut ticks: i32 = 0; // Block variable
+        let mut ticks: i32 = 0;
 
         // State attribute that triggers a return on the third entry
         #[max_entry = 2]
-        @red // Defines the state: red
+        @red // State declaration
             // Conditionless rule that runs once per state entry. Ignores iterations
             announce? {
                 ticks = 0;
                 println!("\nRed light");
             }
 
-            // Causes @red to loop till ticks = 3
+            // Causes @red to loop till false
             timer ? ticks < 3 {
                 ticks += 1;
             }
@@ -40,22 +40,9 @@ fn main() {
 
             timer ? ticks < 10 {
                 ticks += 1;
-            } !? { => @red; } // Explicit transition to @red when ticks = 10
+            } !? { => @red; } // Explicit transition to @red as a fallback
     }
 }
-```
-
-## Install
-
-```toml
-[dependencies]
-banish = "1.3.0"
-```
-
-Or with cargo:
-
-```
-cargo add banish
 ```
 
 ## Why Banish?
@@ -128,6 +115,19 @@ fn main() {
 ```
 
 The manual version requires you to declare the enum, wire up the entry counter, carry a `first_iteration` flag across states, track `interaction` in every arm, and advance the state yourself. The banish version is just the logic.
+
+## Install
+
+```toml
+[dependencies]
+banish = "1.3.0"
+```
+
+Or with cargo:
+
+```
+cargo add banish
+```
 
 ## Concepts
 
@@ -232,7 +232,7 @@ async fn my_machine() {
  
 | Attribute | Description |
 |---|---|
-| `#[banish::machine]` | Setup attribute. Injects `async` into the block attribute and appends `.await` to the banish block when the function is `async`. Sets `id` to the function name for trace output. This is ignored if the items are already present. |
+| `#[banish::machine]` | Setup attribute. Injects `async` and `.await` for async functions. Sets `id` to the function name. This is ignored if the items are already present. |
  
 **Attribute ordering.** `#[banish::machine]` must come before any runtime attribute such as `#[tokio::main]`. Attributes apply top to bottom, so `#[banish::machine]` must see the original function before the runtime transforms it:
  
