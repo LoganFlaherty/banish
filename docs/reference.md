@@ -645,9 +645,7 @@ async fn normalizer() {
     }
 }
 ```
- 
-**`.await` is also injected automatically.** When the function is async, `#[banish::machine]` appends `.await` to the `banish!` expression so the generated future is driven to completion. If `.await` is already written explicitly it is left alone.
- 
+
 **Attribute ordering.** `#[banish::machine]` must come before any runtime attribute such as `#[tokio::main]`. Attributes apply top to bottom. `#[banish::machine]` must see the original `async fn` before the runtime transforms it, otherwise it cannot locate the `banish!` block.
  
 ```rust

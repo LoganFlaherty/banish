@@ -232,7 +232,7 @@ async fn my_machine() {
  
 | Attribute | Description |
 |---|---|
-| `#[banish::machine]` | Setup attribute. Injects `async` into the block attribute when the function is `async`. Sets `id` to the function name for trace output. Both can be overridden by writing them explicitly inside `#![...]`. |
+| `#[banish::machine]` | Setup attribute. Injects `async` into the block attribute and appends `.await` to the banish block when the function is `async`. Sets `id` to the function name for trace output. This is ignored if the items are already present. |
  
 **Attribute ordering.** `#[banish::machine]` must come before any runtime attribute such as `#[tokio::main]`. Attributes apply top to bottom, so `#[banish::machine]` must see the original function before the runtime transforms it:
  
