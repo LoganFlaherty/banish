@@ -1,4 +1,4 @@
-error: Function `main` has #[banish::machine] but no `banish! {}` invocation in its body
+error: Function `main` has `#[banish::machine]` but no `banish! {}` invocation in its body. Make sure `#[banish::machine]` is placed before any runtime attributes
  --> tests/errors/machine_attr_no_banish.rs:4:4
   |
 4 | fn main() {

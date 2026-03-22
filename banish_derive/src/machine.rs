@@ -51,7 +51,8 @@ pub fn machine_handler(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         return syn::Error::new(
             func.sig.ident.span(),
             format!(
-                "Function `{}` has #[banish::machine] but no `banish! {{}}` invocation in its body",
+                "Function `{}` has `#[banish::machine]` but no `banish! {{}}` invocation in its body. \
+                Make sure `#[banish::machine]` is placed before any runtime attributes",
                 fn_name
             ),
         )

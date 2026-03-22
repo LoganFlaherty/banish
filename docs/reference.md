@@ -536,6 +536,26 @@ banish! {
 
 ---
 
+### `trace`
+ 
+Enables trace diagnostics on every state in the block. Equivalent to placing `#[trace]` on each state individually. See the [`trace`](#trace) state attribute for output format and backend setup.
+ 
+```rust
+banish! {
+    #![trace, id = "pipeline"]
+ 
+    @normalize
+        ...
+ 
+    @finalize
+        ...
+}
+```
+ 
+State-level `#[trace]` continues to work alongside `#![trace]` and is redundant but not an error.
+
+---
+
 ## BanishDispatch
  
 `BanishDispatch` is a trait used by `#![dispatch(expr)]` to resolve a variant name at runtime. It has a single method:

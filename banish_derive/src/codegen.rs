@@ -14,6 +14,10 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
     isolated_indices: &[usize]) -> proc_macro2::TokenStream {
     let attrs: &crate::parse_ast::StateAttrs = &state.attrs;
 
+    // Block-level `#![trace]` enables tracing on every state. State-level
+    // `#[trace]` enables it for that state only. Either flag activates tracing.
+    let trace: bool = attrs.trace || input.attrs.trace;
+    
     // Build the trace prefix once: "[banish]" or "[banish:name]".
     let trace_prefix: String = match &input.attrs.id {
         Some(id) => format!("[banish:{}]", id),
@@ -29,7 +33,7 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
 
         let rule_body: proc_macro2::TokenStream = if let Some(condition) = &func.condition {
             if let Some(else_body) = else_body {
-                if attrs.trace {
+                if trace {
                     quote! {
                         let __cond = #condition;
                         ::banish::log::trace!(
@@ -50,7 +54,7 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
                     }
                 }
             } else {
-                if attrs.trace {
+                if trace {
                     quote! {
                         let __cond = #condition;
                         ::banish::log::trace!(
@@ -73,7 +77,7 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
             }
         } else {
             // Conditionless rule. Always fires once (guarded by __first_iteration).
-            if attrs.trace {
+            if trace {
                 quote! {
                     if __first_iteration {
                         ::banish::log::trace!("{} rule `{}`: unconditional (firing)", #trace_prefix, #rule_name);
@@ -128,7 +132,7 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
             quote! { let mut __iter_count: usize = 0; }
         } else { quote! {} };
 
-        let trace_entry: proc_macro2::TokenStream = if attrs.trace {
+        let trace_entry: proc_macro2::TokenStream = if trace {
             let state_name: String = state.name.to_string();
             quote! { ::banish::log::trace!("{} entering state `{}`", #trace_prefix, #state_name); }
         } else { quote! {} };

@@ -184,6 +184,7 @@ banish! {
 | `async` | Expands the block to an `async move { ... }` expression. Required for `.await` inside rule bodies. The result must be `.await`ed by the caller. |
 | `id = "name"` | Sets a display name included in all `trace` output for this machine, emitted as `[banish:name]` instead of `[banish]`. Has no effect if no states use `#[trace]`. |
 | `dispatch(expr)` | Sets the entry state dynamically at runtime from an enum value. The enum must derive `BanishDispatch`. Variant names are matched to state names by converting PascalCase to snake_case. |
+| `trace` | Enables trace diagnostics on every state in the block. Equivalent to placing `#[trace]` on each state individually. Requires a `log`-compatible backend (see below). |
  
 ## Dispatch
  

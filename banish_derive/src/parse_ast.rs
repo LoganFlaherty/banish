@@ -29,6 +29,7 @@ pub struct BlockAttrs {
     pub is_async: bool,
     pub id: Option<String>,
     pub dispatch: Option<proc_macro2::TokenStream>,
+    pub trace: bool,
 }
 
 pub struct State {
@@ -221,6 +222,12 @@ fn parse_block_attrs(content: &syn::parse::ParseBuffer) -> Result<BlockAttrs> {
                         return Err(syn::Error::new(key.span(), "`dispatch` requires an expression: `dispatch(expr)`"));
                     }
                     attrs.dispatch = Some(dispatch_tokens);
+                }
+                "trace" => {
+                    if attrs.trace {
+                        return Err(syn::Error::new(key.span(), "Duplicate attribute `trace`. Remove the duplicate"));
+                    }
+                    attrs.trace = true;
                 }
                 other => {
                     return Err(syn::Error::new(
