@@ -1,0 +1,10 @@
+error: unexpected end of input, Unexpected end of input, expected rule body `{`
+ --> tests/errors/rule_missing_body.rs:4:5
+  |
+4 | /     banish! {
+5 | |         @foo
+6 | |             step ? x > 0
+7 | |     }
+  | |_____^
+  |
+  = note: this error originates in the macro `banish` (in Nightly builds, run with -Z macro-backtrace for more info)

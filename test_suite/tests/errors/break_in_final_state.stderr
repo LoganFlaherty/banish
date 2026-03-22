@@ -1,0 +1,5 @@
+error: Rule `done` in final state `last` uses `break`, which exits the fixed-point loop and advances past the last valid state index, causing a runtime panic. Use `return` or `=> @state` instead
+ --> tests/errors/break_in_final_state.rs:8:13
+  |
+8 |             done? {
+  |             ^^^^

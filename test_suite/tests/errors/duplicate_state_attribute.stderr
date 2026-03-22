@@ -1,0 +1,5 @@
+error: Duplicate attribute `trace`. Remove the duplicate
+ --> tests/errors/duplicate_state_attribute.rs:5:18
+  |
+5 |         #[trace, trace]
+  |                  ^^^^^

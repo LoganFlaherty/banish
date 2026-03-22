@@ -1,0 +1,5 @@
+error: Unknown state transition `nowhere`. Declare the state or fix the name
+ --> tests/errors/unknown_transition_target_max_entry.rs:5:29
+  |
+5 |         #[max_entry = 1 => @nowhere]
+  |                             ^^^^^^^

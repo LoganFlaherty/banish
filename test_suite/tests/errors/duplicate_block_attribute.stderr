@@ -1,0 +1,5 @@
+error: Duplicate attribute `async`. Remove the duplicate
+ --> tests/errors/duplicate_block_attribute.rs:5:19
+  |
+5 |         #![async, async]
+  |                   ^^^^^

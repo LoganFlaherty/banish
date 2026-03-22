@@ -1,0 +1,38 @@
+error: BanishDispatch can only be derived on enums
+ --> tests/errors/banishdispatch_on_nonenum.rs:4:10
+  |
+4 | #[derive(BanishDispatch)]
+  |          ^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the derive macro `BanishDispatch` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0425]: cannot find type `string` in this scope
+ --> tests/errors/banishdispatch_on_nonenum.rs:6:11
+  |
+6 |     name: string
+  |           ^^^^^^
+  |
+ ::: $RUST/alloc/src/string.rs
+  |
+  | pub struct String {
+  | ----------------- similarly named struct `String` defined here
+  |
+help: a struct with a similar name exists (notice the capitalization)
+  |
+6 -     name: string
+6 +     name: String
+  |
+
+warning: unused import: `banish::banish`
+ --> tests/errors/banishdispatch_on_nonenum.rs:1:5
+  |
+1 | use banish::banish;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/errors/banishdispatch_on_nonenum.rs:7:2
+  |
+7 | }
+  |  ^ consider adding a `main` function to `$DIR/tests/errors/banishdispatch_on_nonenum.rs`

@@ -1,5 +1,5 @@
 use quote::quote;
-use crate::parse_ast::{ Context, State, BanishStmt };
+use crate::parse_ast::{ Block, State, BanishStmt };
 
 
 /// Returns a stable identifier for the `max_entry` counter of state `index`.
@@ -10,9 +10,19 @@ pub fn entry_counter_ident(index: usize) -> syn::Ident {
     )
 }
 
-pub fn generate_state(state: &State, input: &Context, index: usize,
+pub fn generate_state(state: &State, input: &Block, index: usize,
     isolated_indices: &[usize]) -> proc_macro2::TokenStream {
     let attrs: &crate::parse_ast::StateAttrs = &state.attrs;
+
+    // Block-level `#![trace]` enables tracing on every state. State-level
+    // `#[trace]` enables it for that state only. Either flag activates tracing.
+    let trace: bool = attrs.trace || input.attrs.trace;
+    
+    // Build the trace prefix once: "[banish]" or "[banish:name]".
+    let trace_prefix: String = match &input.attrs.id {
+        Some(id) => format!("[banish:{}]", id),
+        None => "[banish]".to_string(),
+    };
 
     let rules = state.rules.iter().map(|func: &crate::parse_ast::Rule| {
         let rule_name: String = func.name.to_string();
@@ -23,12 +33,12 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
 
         let rule_body: proc_macro2::TokenStream = if let Some(condition) = &func.condition {
             if let Some(else_body) = else_body {
-                if attrs.trace {
+                if trace {
                     quote! {
                         let __cond = #condition;
                         ::banish::log::trace!(
-                            "[banish] rule `{}`: condition = {}",
-                            #rule_name, __cond
+                            "{} rule `{}`: condition = {}",
+                            #trace_prefix, #rule_name, __cond
                         );
                         if __cond {
                             __interaction = true;
@@ -44,12 +54,12 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
                     }
                 }
             } else {
-                if attrs.trace {
+                if trace {
                     quote! {
                         let __cond = #condition;
                         ::banish::log::trace!(
-                            "[banish] rule `{}`: condition = {}",
-                            #rule_name, __cond
+                            "{} rule `{}`: condition = {}",
+                            #trace_prefix, #rule_name, __cond
                         );
                         if __cond {
                             __interaction = true;
@@ -67,10 +77,10 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
             }
         } else {
             // Conditionless rule. Always fires once (guarded by __first_iteration).
-            if attrs.trace {
+            if trace {
                 quote! {
                     if __first_iteration {
-                        ::banish::log::trace!("[banish] rule `{}`: unconditional (firing)", #rule_name);
+                        ::banish::log::trace!("{} rule `{}`: unconditional (firing)", #trace_prefix, #rule_name);
                         __interaction = true;
                         #(#body)*
                     }
@@ -97,7 +107,7 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
                     let target_index: usize = input.states
                         .iter()
                         .position(|s: &State| &s.name == target)
-                        .expect("banish: max_iter state transition not found. Should have been caught by validate_transition_targets");
+                        .expect("`max_iter` state transition not found. Should have been caught by validate_transition_targets");
                     let target_lit: syn::Index = syn::Index::from(target_index);
                     quote! {
                         __current_state = #target_lit;
@@ -122,9 +132,9 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
             quote! { let mut __iter_count: usize = 0; }
         } else { quote! {} };
 
-        let trace_entry: proc_macro2::TokenStream = if attrs.trace {
+        let trace_entry: proc_macro2::TokenStream = if trace {
             let state_name: String = state.name.to_string();
-            quote! { ::banish::log::trace!("[banish] entering state `{}`", #state_name); }
+            quote! { ::banish::log::trace!("{} entering state `{}`", #trace_prefix, #state_name); }
         } else { quote! {} };
 
         quote! {
@@ -147,7 +157,7 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
                 let target_index: usize = input.states
                     .iter()
                     .position(|s: &State| &s.name == target)
-                    .expect("banish: max_entry state transition not found. Should have been caught by validate_transition_targets");
+                    .expect("`max_entry` state transition not found. Should have been caught by validate_transition_targets");
                 let target_lit: syn::Index = syn::Index::from(target_index);
                 quote! {
                     __current_state = #target_lit;
@@ -182,9 +192,11 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
     // The final non-isolated state never needs to advance the scheduler. Any
     // legitimate exit is via a user return or transition, which the validator
     // above enforces. All other states advance normally.
+    let state_vars = state.vars.iter().map(|s| quote! { #s });
     let index_lit: syn::Index = syn::Index::from(index);
     quote! {
         #index_lit => {
+            #(#state_vars)*
             #entry_guard
             #loop_body
             #scheduler_advance
@@ -192,7 +204,7 @@ pub fn generate_state(state: &State, input: &Context, index: usize,
     }
 }
 
-pub fn generate_stmt(stmt: &BanishStmt, input: &Context) -> proc_macro2::TokenStream {
+pub fn generate_stmt(stmt: &BanishStmt, input: &Block) -> proc_macro2::TokenStream {
     match stmt {
         BanishStmt::Rust(stmt) => quote! { #stmt },
         BanishStmt::StateTransition(transition) => {
@@ -205,6 +217,20 @@ pub fn generate_stmt(stmt: &BanishStmt, input: &Context) -> proc_macro2::TokenSt
             quote! {
                 __current_state = #target;
                 continue 'banish_main;
+            }
+        }
+        BanishStmt::GuardedStateTransition(transition, guard) => {
+            let target: usize = input.states
+                .iter()
+                .position(|state: &State| &state.name == transition)
+                .expect("Transition target not found. Should have been caught by validate_transition_targets");
+ 
+            let target: syn::Index = syn::Index::from(target);
+            quote! {
+                if #guard {
+                    __current_state = #target;
+                    continue 'banish_main;
+                }
             }
         }
     }

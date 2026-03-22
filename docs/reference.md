@@ -8,20 +8,23 @@ This document is the full technical reference for Banish. For a quick introducti
 1. [Execution Model](#execution-model)
 2. [States](#states)
 3. [Rules](#rules)
-4. [Transitions](#transitions)
-5. [Return Values](#return-values)
-6. [State Attributes](#state-attributes)
-7. [Examples](#examples)
-8. [Error Reference](#error-reference)
-9. [Known Limitations](#known-limitations)
+4. [Variables](#variables)
+5. [Transitions](#transitions)
+6. [Return Values](#return-values)
+7. [State Attributes](#state-attributes)
+8. [Block Attributes](#block-attributes)
+9. [BanishDispatch](#banishdispatch)
+10. [Function Attributes](#function-attributes)
+11. [Examples](#examples)
+12. [Known Limitations](#known-limitations)
 
 ---
 
 ## Execution Model
 
-A `banish!` block expands to a labeled loop containing a `match` over an internal state index. The machine starts at the first declared state and advances through them in declaration order.
+A `banish!` block expands to a labeled loop containing a `match` over an internal state index. The machine starts at the first non-isolated state in declaration order and advances through non-isolated states in declaration order. Isolated states are skipped by the scheduler and can only be entered via an explicit `=> @state` transition.
 
-Within each state, rules are evaluated top to bottom on every pass. If any rule fires, `__interaction` is set to `true` and the state loops back to the top, re-evaluating all rules from the beginning. Once a full pass completes with no rules firing — the fixed point — the machine advances to the next state.
+Within each state, rules are evaluated top to bottom on every pass. If any rule fires, `__interaction` is set to `true` and the state loops back to the top, re-evaluating all rules from the beginning. Once a full pass completes with no rules firing (the fixed point) the machine advances to the next non-isolated state.
 
 ```
   enter state
@@ -37,7 +40,7 @@ Within each state, rules are evaluated top to bottom on every pass. If any rule 
   fixed point reached
        │
        ▼
-  advance to next state
+  advance to next non-isolated state
 ```
 
 All of this is generated at compile time. There is no runtime interpreter, allocator, or virtual machine.
@@ -51,14 +54,16 @@ A state is declared with `@name` and contains one or more rules. States are eval
 ```rust
 banish! {
     @first
-        done? { return; }
+        // Rules
+        ...
 
     @second
-        // never reached in this example
+        // Rules
+        ...
 }
 ```
 
-The machine always starts at the first declared state. The implicit scheduler advances to the next state once the current state reaches its fixed point. States can be removed from implicit scheduling with the [`isolate`](#isolate) attribute.
+The machine always starts at the first non-isolated state in declaration order. The implicit scheduler advances to the next non-isolated state once the current state reaches its fixed point. States can be removed from implicit scheduling with the [`isolate`](#isolate) attribute.
 
 **Naming:** State names follow standard Rust identifier rules. Duplicate state names are a compile error.
 
@@ -77,6 +82,7 @@ A rule fires when `condition` evaluates to `true`. The condition is any Rust exp
 ```rust
 @process
     clamp ? value > 100 { value = 100; }
+
     log ? ready { println!("{}", value); ready = false; }
 ```
 
@@ -92,9 +98,9 @@ A conditionless rule fires exactly once per state entry, on the first pass only.
 @setup
     init? {
         value = compute();
-        println!("initialized");
+        println!("Initialized");
     }
-    // remaining rules run after init fires once
+    // Remaining rules run after init fires once
 ```
 
 ### Fallback Branches
@@ -108,11 +114,11 @@ A fallback branch runs when the rule's condition is `false`. Unlike the rule bod
 ```rust
 @check
     valid ? value > 0 {
-        println!("valid: {}", value);
+        println!("Valid: {}", value);
     } !? {
-        println!("invalid, resetting");
+        println!("Invalid, resetting");
         value = default;
-        => @check; // explicit re-entry needed here
+        => @check; // Explicit re-entry needed here
     }
 ```
 
@@ -122,11 +128,59 @@ A fallback branch runs when the rule's condition is `false`. Unlike the rule bod
 
 ---
 
+## Variables
+ 
+Plain Rust `let` declarations can be placed at two scopes: directly inside the `banish!` block before any state, or inside a state before any rules. Both follow standard Rust `let` syntax including type annotations and `let mut`.
+ 
+### Block-level
+ 
+Block-level declarations appear after the `#![...]` attribute block (if present) and before the first state. They are emitted inside the generated closure or async block and live for the entire lifetime of the machine, accessible from every state and rule.
+ 
+```rust
+banish! {
+    let mut count: u32 = 0;
+    let threshold = 10;
+ 
+    @accumulate
+        inc ? count < threshold { count += 1; }
+ 
+        done ? count >= threshold { return count; }
+}
+```
+ 
+Variables declared here behave identically to variables declared outside the block and captured by move, but keep the declaration co-located with the logic that uses it.
+
+### State-level
+ 
+State-level declarations appear after the `@name` line and before any rules. They are re-initialized on every entry to the state, making them suitable for per-pass scratch values that do not need to persist across entries.
+ 
+```rust
+banish! {
+    @process
+        let mut dirty = false;
+ 
+        check_a ? condition_a { dirty = true; }
+
+        check_b ? condition_b { dirty = true; }
+ 
+        flush ? dirty {
+            write_output();
+            return;
+    }
+}
+```
+ 
+If a value needs to persist across entries to the same state, declare it at block level instead.
+ 
+**Shadowing:** a state-level declaration with the same name as a block-level one is valid Rust and shadows the outer binding within that state's scope. The block-level variable is unaffected.
+
+---
+
 ## Transitions
 
 ### Implicit (Scheduler)
 
-Once a state reaches its fixed point, the machine automatically advances to the next state in declaration order. This is the default behavior and requires no syntax.
+Once a state reaches its fixed point, the machine automatically advances to the next non-isolated state in declaration order. This is the default behavior and requires no syntax.
 
 ### Explicit (`=> @state`)
 
@@ -134,18 +188,42 @@ Once a state reaches its fixed point, the machine automatically advances to the 
 => @state;
 ```
 
-An explicit transition immediately jumps to the named state, bypassing the implicit scheduler. It can appear anywhere in a rule body or fallback branch. The remaining rules in the current pass are abandoned and the target state begins a fresh evaluation.
+An explicit transition immediately jumps to the named state, bypassing the implicit scheduler. It must appear as a standalone statement in a rule body or fallback branch. The remaining rules in the current pass are abandoned and the target state begins a fresh evaluation.
 
 ```rust
 @yellow
-    timer ? ticks < 10 { ticks += 1; }
-    !? {
+    timer ? ticks < 10 {
+        ticks += 1;
+    } !? {
         ticks = 0;
-        => @red;  // jump back to @red directly
+        => @red;  // Jump back to @red directly
     }
 ```
 
 Transition targets must refer to a declared state name. Unknown targets are a compile error at the `=> @state` callsite.
+
+### Guarded Transitions (`=> @state if condition`)
+
+```
+=> @state if condition;
+```
+
+A guarded transition jumps to the named state only when `condition` evaluates to `true`. If the condition is `false`, the statement is a no-op and execution continues with the remaining statements in the rule body. Like an explicit transition, it must appear as a standalone statement.
+
+```rust
+@process
+    step? {
+        do_work();
+        => @done if finished;
+        log_progress(); // runs only when guard is false
+    }
+
+    timeout ? elapsed > limit { => @abort; }
+```
+
+This handles the most common case of needing a conditional jump without splitting the logic into a separate rule. The guard condition is any Rust expression that evaluates to `bool`.
+
+**Guarded transitions do not satisfy the exit requirement** for isolated states or the final-state validator. Because the guard may never be true, a state relying solely on guarded transitions has no guaranteed exit path. A non-guarded `=> @state` or `return` is still required.
 
 ### Early Exit (`break` / `continue`)
 
@@ -157,6 +235,7 @@ Because rule bodies are plain Rust, the native loop control keywords work as-is 
 ```rust
 @process
     step ? !done { do_work(); }
+
     bail ? error  { break; }   // exit state early, no transition needed
 ```
 
@@ -165,28 +244,30 @@ Because rule bodies are plain Rust, the native loop control keywords work as-is 
 ## Return Values
 
 `return` exits the entire `banish!` block immediately, optionally with a value. The block evaluates to that value, so it can be assigned or returned from an enclosing function.
-
+ 
 ```rust
 let result: &str = banish! {
-    @evaluate
-        pass ? score >= 60 { return "pass"; }
-        fail ? score <  60 { return "fail"; }
+    @grade
+        pass ? score >= 60 {
+            return "pass";
+        } !? { return "fail"; }
 };
 ```
-
+ 
+The return type is inferred by the Rust compiler from the `return` expressions in the block. If the block returns nothing, it evaluates to `()`.
+ 
+When `banish!` is the tail expression of a function, its value is the function's return value implicitly. `return` inside the block exits the generated closure, and the closure's value becomes the function's result.
+ 
 ```rust
-fn find(buffer: &[String], target: &str) -> Option<usize> {
-    let mut idx = 0;
+fn classify(score: u32) -> &'static str {
     banish! {
-        @search
-            not_found ? idx >= buffer.len() { return None; }
-            found ? buffer[idx] == target { return Some(idx); }
-            advance ? { idx += 1; }
+        @grade
+            pass ? score >= 60 {
+                return "pass"; 
+            } !? { return "fail"; }
     }
 }
 ```
-
-The return type is inferred by the Rust compiler from the `return` expressions in the block. If the block returns nothing, it evaluates to `()`.
 
 ---
 
@@ -197,6 +278,7 @@ Attributes are declared above a state and modify its runtime behavior. Multiple 
 ```rust
 #[isolate, max_iter = 10 => @fallback, trace]
 @my_state
+    // Rules
     ...
 ```
 
@@ -211,19 +293,18 @@ banish! {
     @main
         trigger ? condition {
             => @handler;
-        }
-        done? { return; }
+        } !? { return; }
 
     #[isolate, max_iter = 1 => @main]
     @handler
         handle? {
-            println!("handling");
+            println!("Handling");
         }
 }
 ```
 
 **Constraints:**
-* An isolated state must have a defined exit: either a `return`, `=> @state` in its rules, or `max_iter = N => @state`. Isolated states with no exit are a compile error. `max_entry = N => @state` does not satisfy this requirement — it only fires on the (N+1)th entry and provides no exit for entries 1 through N.
+* An isolated state must have a defined exit: either a `return`, `=> @state` in its rules, or `max_iter = N => @state`. Isolated states with no exit are a compile error. `max_entry = N => @state` does not satisfy this requirement because it only fires on the (N+1)th entry and provides no exit for entries 1 through N. `=> @state if condition` does not satisfy this requirement because the guard may never be true.
 
 ---
 
@@ -267,107 +348,365 @@ Limits the number of times a state can be entered. On the `(N+1)`th entry the st
 #[max_entry = 2]
 @red
     announce? { println!("Red light"); ticks = 0; }
+
     timer ? ticks < 3 { ticks += 1; }
 ```
 
 In the traffic light example above, the machine exits after `@red` is entered a third time. The entry counter persists for the lifetime of the `banish!` block and is not reset between cycles.
 
-**Note:** `max_entry = N => @state` on an isolated state does not remove the requirement for a rule-level exit. The redirect only fires on the (N+1)th entry — entries 1 through N still need a `return`, `=> @state`, or `max_iter = N => @state` to exit normally.
+**Note:** `max_entry = N => @state` on an isolated state does not remove the requirement for a rule-level exit. The redirect only fires on the (N+1)th entry. Entries 1 through N still need a `return`, `=> @state`, or `max_iter = N => @state` to exit normally.
 
 ---
 
 ### `trace`
 
-Emits diagnostics via [`log::trace!`](https://docs.rs/log) on state entry and before each rule evaluation. Requires a `log`-compatible backend to capture output — without one, diagnostics are silently discarded.
-
+Emits diagnostics via [`log::trace!`](https://docs.rs/log) on state entry and before each rule evaluation. Requires a backend to capture output. Without one, diagnostics are silently discarded.
+ 
 ```rust
 #[trace]
 @compute
     step_a ? x > 0  { x -= 1; }
+ 
     step_b ? x == 0 { return; }
 ```
-
+ 
 Output format:
 ```
 [banish] entering state `compute`
 [banish] rule `step_a`: condition = true
 [banish] rule `step_b`: condition = false
 ```
-
-[`env_logger`](https://docs.rs/env_logger) is the simplest backend. Add it to your `Cargo.toml`:
-
+ 
+The simplest way to enable trace output is `banish::init_trace`, available behind the `trace-logger` feature:
+ 
 ```toml
 [dependencies]
-env_logger = "0.11.9"
+banish = { version = "1.x", features = ["trace-logger"] }
 ```
-
-Initialize it at startup and run with `RUST_LOG=trace`:
-
+ 
+Call it once at the start of `main`. Pass `Some("file path")` to write output to a file, or pass `None` to print to stderr:
+ 
 ```rust
 fn main() {
-    env_logger::init();
-    // ...
+    banish::init_trace(Some("trace.log")); // write to file
+    // banish::init_trace(None); // print to stderr
+    ...
+}
+```
+ 
+**Custom backends:** If you need full control over log routing or filtering, skip `init_trace` and initialise any [`log`](https://docs.rs/log)-compatible backend directly. Banish emits all trace diagnostics through the `log` facade, so any backend will capture them. `log` is re-exported from `banish` and does not need to be added as a separate dependency.
+
+---
+
+## Block Attributes
+ 
+Block attributes are declared at the top of a `banish!` block using inner attribute syntax and modify the behavior of the entire block. Multiple attributes are comma-separated.
+ 
+```rust
+banish! {
+    #![async, id = "fetcher"]
+ 
+    @my_state
+        ...
+}
+```
+ 
+The `#![...]` line must appear before the first state declaration. Only one `#![...]` block is permitted per `banish!` invocation.
+
+**Combining with state attributes:** block attributes are independent of state-level attributes. Meaning they all work normally in any combination.
+ 
+---
+ 
+### `async`
+ 
+Expands the `banish!` block to an `async move { ... }` expression instead of an immediately invoked closure. The result is a `Future` and must be `.await`ed by the caller.
+ 
+```rust
+let result = banish! {
+    #![async]
+ 
+    @fetch
+        load? {
+            let data = some_async_fn().await;
+            return data;
+        }
+}.await;
+```
+ 
+**When to use it:** `async` is required any time a rule body contains `.await`. Without it, `.await` inside a rule body is a compile error because the generated closure is not async.
+ 
+**What it changes:** Without `#![async]` the block expands to `(move || { ... })()`. With `#![async]` it expands to `async move { ... }`, which suspends at each `.await` point and must be driven by an async runtime such as `tokio`.
+ 
+**Return values** work the same way as in a synchronous block. `return expr;` exits the block with a value; the resolved type of the `Future` is inferred from the `return` expressions.
+ 
+```rust
+#[tokio::main]
+async fn main() {
+    let status: &str = banish! {
+        #![async]
+ 
+        @check
+            ping? {
+                let ok = reqwest::get("https://example.com").await.is_ok();
+
+                if ok { return "up"; }
+                else { return "down"; }
+            }
+    }.await;
+ 
+    println!("Status: {}", status);
 }
 ```
 
-```bash
-# bash / zsh
-RUST_LOG=trace cargo run -q 2> trace.log
+---
 
-# PowerShell
-$env:RUST_LOG="trace"; cargo run -q 2> trace.log
+### `id = "name"`
+
+Sets a display name for this machine that is included in all `trace` output. Without `id`, trace lines are prefixed with `[banish]`. With `id`, they are prefixed with `[banish:name]`.
+
+```rust
+banish! {
+    #![id = "lexer"]
+
+    #[trace]
+    @tokenize
+        next ? !done { advance(); }
+
+        finish ? done { return; }
+}
 ```
 
-`log` itself is re-exported from `banish` and does not need to be added as a separate dependency.
+Output:
+```
+[banish:lexer] entering state `tokenize`
+[banish:lexer] rule `next`: condition = true
+[banish:lexer] rule `finish`: condition = false
+```
+
+This is most useful when multiple `banish!` blocks emit trace output in the same run. Without an `id`, their output is indistinguishable. `id` has no effect if no states in the block use `#[trace]`.
+
+---
+
+### `dispatch(expr)`
+ 
+Sets the entry state dynamically at runtime by matching the variant name of `expr` against the declared state names. The entry state is no longer fixed at compile time. It is resolved on each invocation from the value of `expr`.
+ 
+```rust
+let entry = PipelineState::Validate;
+banish! {
+    #![dispatch(entry)]
+ 
+    @normalize
+        ...
+ 
+    @validate
+        ...
+ 
+    @finalize
+        done? { return; }
+}
+```
+ 
+The enum passed to `dispatch` must implement `BanishDispatch`, which maps each variant to its snake_case name as a `&'static str`. The simplest way to satisfy this is `#[derive(BanishDispatch)]`. See [BanishDispatch](#banishdispatch) for details.
+ 
+**Variant name matching** converts PascalCase variant names to snake_case and matches them against state names verbatim. `Normalize` matches `@normalize`, `FetchPokemon` matches `@fetch_pokemon`, and so on. Passing a variant whose converted name does not match any declared state is a runtime panic.
+ 
+**Variants with data** are supported. The data is ignored. Only the variant name is used for dispatch. If you need the data, extract it before the block:
+ 
+```rust
+let payload = match &entry {
+    PipelineState::Resume(data) => Some(data),
+    _ => None,
+};
+ 
+banish! {
+    #![dispatch(entry)]
+    ...
+}
+```
+ 
+**Combining with other block attributes** works normally. `dispatch` can appear alongside `async` and `id` in the same `#![...]` line:
+ 
+```rust
+banish! {
+    #![async, id = "pipeline", dispatch(entry)]
+    ...
+}
+```
+
+---
+
+### `trace`
+ 
+Enables trace diagnostics on every state in the block. Equivalent to placing `#[trace]` on each state individually. See the [`trace`](#trace) state attribute for output format and backend setup.
+ 
+```rust
+banish! {
+    #![trace, id = "pipeline"]
+ 
+    @normalize
+        ...
+ 
+    @finalize
+        ...
+}
+```
+ 
+State-level `#[trace]` continues to work alongside `#![trace]` and is redundant but not an error.
+
+---
+
+## BanishDispatch
+ 
+`BanishDispatch` is a trait used by `#![dispatch(expr)]` to resolve a variant name at runtime. It has a single method:
+ 
+```rust
+pub trait BanishDispatch {
+    fn variant_name(&self) -> &'static str;
+}
+```
+ 
+`variant_name` returns the snake_case name of the current variant as a `&'static str`. The return type is static so there is no allocation on dispatch.
+ 
+### Deriving
+ 
+`#[derive(BanishDispatch)]` generates the implementation automatically. All variant kinds are supported. Unit, tuple, and struct variants all produce the correct name. Data fields are ignored.
+ 
+```rust
+use banish::BanishDispatch;
+ 
+#[derive(BanishDispatch)]
+enum PipelineState {
+    Normalize,
+    Validate,
+    Finalize,
+    Resume(CheckpointData),   // data is ignored, name still matches @resume
+}
+```
+ 
+### Manual Implementation
+ 
+If you need custom naming or are not using the derive macro:
+ 
+```rust
+impl BanishDispatch for PipelineState {
+    fn variant_name(&self) -> &'static str {
+        match self {
+            PipelineState::Normalize => "normalize",
+            PipelineState::Validate => "validate",
+            PipelineState::Finalize => "finalize",
+            PipelineState::Resume(_) => "resume",
+        }
+    }
+}
+```
+ 
+The returned string must match a declared state name exactly. Returning a name that does not match any state causes a runtime panic on dispatch.
+
+---
+
+## Function Attributes
+ 
+Function attributes are declared on `fn` items using outer attribute syntax and modify how the function interacts with its `banish!` block. They are distinct from block attributes, which are written inside the `banish!` block with `#![...]`.
+ 
+---
+ 
+### `#[banish::machine]`
+ 
+A setup attribute that reduces boilerplate for functions whose body contains a `banish!` block. It does three things automatically:
+ 
+**Injects `async` into the block attribute** when applied to an `async fn`, so `#![async]` does not need to be written manually. Writing it explicitly is also fine. The attribute detects it and skips injection.
+
+**Injects `.await` on the `banish!` expression** when the function is async, so the future produced by `#![async]` is driven to completion automatically. If `.await` is already present it is left alone.
+ 
+**Sets `id` to the function name** so trace output is labelled without any extra boilerplate. Can be overridden by writing `#![id = "name"]` inside the `banish!` block explicitly.
+ 
+Injections don't happen if the corresponding item is already present. `#[banish::machine]` is purely additive.
+ 
+```rust
+// Before
+#[tokio::main]
+async fn normalizer() {
+    banish! {
+        #![async, id = "normalizer"]
+ 
+        @process
+            step? { do_work().await; return; }
+    }
+}
+ 
+// After
+#[banish::machine]
+#[tokio::main]
+async fn normalizer() {
+    banish! {
+        @process
+            step? { do_work().await; return; }
+    }
+}
+```
+ 
+**`.await` is also injected automatically.** When the function is async, `#[banish::machine]` appends `.await` to the `banish!` expression so the generated future is driven to completion. If `.await` is already written explicitly it is left alone.
+ 
+**Attribute ordering.** `#[banish::machine]` must come before any runtime attribute such as `#[tokio::main]`. Attributes apply top to bottom. `#[banish::machine]` must see the original `async fn` before the runtime transforms it, otherwise it cannot locate the `banish!` block.
+ 
+```rust
+#[banish::machine]  // must be first
+#[tokio::main]
+async fn main() {
+    banish! { ... }
+}
+```
+ 
+**Placement of `banish!`.** The `banish!` invocation can appear anywhere in the function body as a standalone statement, a tail expression, or a `let` binding:
+ 
+```rust
+#[banish::machine]
+#[tokio::main]
+async fn main() {
+    setup();
+    let result = banish! {
+        @grade
+            pass ? score >= 60 { return "pass"; } !? { return "fail"; }
+    };
+    println!("{}", result);
+}
+```
+ 
+**`#[banish::machine]` takes no arguments.** All block-level configuration belongs inside `#![...]` within the `banish!` block, exactly as it does without the attribute. The function attribute only handles the two injections described above.
 
 ---
 
 ## Examples
 
-### Hello World
-
-A minimal single-state machine.
-
-```rust
-use banish::banish;
-
-fn main() {
-    banish! {
-        @hello
-            print? {
-                println!("Hello, world!");
-                return;
-            }
-    }
-}
-```
-
----
-
 ### Traffic Lights
 
-Demonstrates implicit state advancement, conditionless rules, fallback transitions, and incorporating attributes.
+A simple state machine that demonstrates implicit and explicit state transition, block variables, conditionless rules, fallback branches, and using the state attribute `max_entry`.
 
 ```rust
 use banish::banish;
 
 fn main() {
-    let mut ticks: i32 = 0;
     banish! {
+        let mut ticks: i32 = 0;
+
         #[max_entry = 2]
         @red
             announce? {
                 ticks = 0;
-                println!("Red light");
+                println!("\nRed light");
             }
+
             timer ? ticks < 3 { ticks += 1; }
 
         @green
             announce? { println!("Green light"); }
+
             timer ? ticks < 6 { ticks += 1; }
 
         @yellow
             announce? { println!("Yellow light"); }
+
             timer ? ticks < 10 {
                 ticks += 1;
             } !? { => @red; }
@@ -375,145 +714,454 @@ fn main() {
 }
 ```
 
-`@red` and `@green` each reach their fixed point once their timer rule stops firing. `@yellow`'s fallback branch transitions back to `@red` explicitly. Without this, fallback branches do not trigger re-evaluation.
+`@red` and `@green` each reach their fixed point once their timer rule stops firing.
+
+`@yellow`'s fallback branch transitions back to `@red` explicitly. Without this, fallback branches do not trigger re-evaluation.
+
+`max_entry = 2` ensures this machine only loops through all its states twice. Immediately returning on the third entry of `@red`.
 
 ---
 
 ### Dragon Fight
 
-Demonstrates early return with a value, external crate usage, multi-state transitions, and fallback branches.
+A turn-based battle that demonstrates early return with a value, external crate usage, cycling transitions, and using the state attribute `max_iter` with the transition option.
+
+```toml
+[dependencies]
+rand = "0.10.0"
+```
 
 ```rust
 use banish::banish;
 use rand::prelude::*;
 
 fn main() {
-    let mut rng = rand::rng();
-    let mut player_hp = 20;
-    let mut dragon_hp = 50;
-
-    println!("BATTLE START");
+    println!("\n==== Battle Start ====");
 
     let result: &str = banish! {
+        let mut rng = rand::rng();
+        let mut player_hp = 20;
+        let mut dragon_hp = 50;
+
+        #[max_iter = 1 => @dragon_turn]
         @player_turn
             attack? {
                 let damage = rng.random_range(5..15);
                 dragon_hp -= damage;
                 println!("You hit the dragon for {} dmg! (Dragon HP: {})", damage, dragon_hp);
             }
-            check_win ? dragon_hp <= 0 { return "Victory!"; }
-            end_turn? { => @dragon_turn; }
 
+            check_win ? dragon_hp <= 0 { return "Victory!"; }
+
+        #[max_iter = 1 => @player_turn]
         @dragon_turn
             attack? {
                 let damage = rng.random_range(2..20);
                 player_hp -= damage;
                 println!("Dragon breathes fire for {} dmg! (Player HP: {})", damage, player_hp);
             }
-            halfway ? player_hp <= 10 && dragon_hp <= 25 {
+
+            half_health ? player_hp <= 10 && dragon_hp <= 25 {
                 println!("\nThe battle is getting intense!\n");
             } !? {
                 println!("\nThe dragon is getting weak!\n");
             }
+
             check_loss ? player_hp <= 0 { return "Defeat..."; }
-            end_turn? { => @player_turn; }
     };
 
     println!("GAME OVER: {}", result);
 }
 ```
 
-`end_turn?` is conditionless, so it fires exactly once per state entry. After `attack?` has fired and `check_win`/`check_loss` have been evaluated. This ensures the turn always ends rather than looping indefinitely.
+`max_iter = 1` on each state caps the fixed-point loop to a single iteration.
 
+After `attack?` fires and `check_win` or `check_loss` has been evaluated, if neither returns, the iteration limit is exhausted and the redirect transitions to the opposing state.
+ 
 ---
 
-### Find Index
+### Async HTTP Fetch
 
-Demonstrates `banish!` inside a regular function, returning through the enclosing function's return type.
+An async workflow that demonstrates `#![async, id = ""]`, `.await`, `#[trace]`, and returning a tuple value from an async block. Pokemon data is fetched from the `pokeapi` and loaded into stucts to be accessed.
+
+```toml
+[dependencies]
+banish = { version = "1.3.0", features = ["trace-logger"] }
+tokio = { version = "1.50.0", features = ["full"] }
+reqwest = { version = "0.13.2", features = ["json"] }
+serde = { version = "1.0.288", features = ["derive"] }
+env_logger = "0.11.9"
+```
 
 ```rust
 use banish::banish;
+use serde::Deserialize;
 
-fn find_index(buffer: &[String], target: &str) -> Option<usize> {
-    let mut idx = 0;
-    banish! {
-        @search
-            // bounds check must come first to prevent out-of-bounds indexing below
-            not_found ? idx >= buffer.len() { return None; }
-            found ? buffer[idx] == target { return Some(idx); }
-            advance?  { idx += 1; }
+#[derive(Deserialize)]
+struct Pokemon {
+    name: String,
+    base_experience: u32,
+    height: u32,
+    weight: u32,
+}
+
+#[derive(Deserialize)]
+struct Move {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct MoveEntry {
+    #[serde(rename = "move")]
+    move_data: Move,
+}
+
+#[derive(Deserialize)]
+struct PokemonMoves {
+    moves: Vec<MoveEntry>,
+}
+
+#[tokio::main]
+async fn main() {
+    banish::init_trace(Some("trace.log"));
+    let (pokedata, moves) = banish! {
+        #![async, id = "pokedata"]
+
+        let mut pokemon: Option<Pokemon> = None;
+
+        #[trace]
+        @fetch_pokemon
+            load_pokemon? {
+                let response = reqwest::get("https://pokeapi.co/api/v2/pokemon/charizard")
+                    .await
+                    .expect("Request failed");
+                pokemon = Some(
+                    response.json::<Pokemon>().await.expect("failed to parse pokemon")
+                );
+            }
+
+            load_pokemon_moves? {
+                let response = reqwest::get("https://pokeapi.co/api/v2/pokemon/charizard")
+                    .await
+                    .expect("Request failed");
+                let data = response.json::<PokemonMoves>().await.expect("failed to parse moves");
+                let moves: Vec<String> = data.moves
+                    .iter()
+                    .take(5)
+                    .map(|m| m.move_data.name.clone())
+                    .collect();
+                return (pokemon, moves);
+            }
+    }.await;
+
+    println!("\n==== POKEDATA ====");
+    if let Some(p) = &pokedata {
+        println!("Name: {}", p.name);
+        println!("Base experience: {}", p.base_experience);
+        println!("Height: {}", p.height);
+        println!("Weight: {}", p.weight);
+    }
+
+    println!("\nFirst 5 moves:");
+    for m in &moves {
+        println!("  - {}", m);
     }
 }
 ```
 
-Rule ordering is significant here. `not_found` must precede `found` and `advance`. If `idx` is out of bounds, `buffer[idx]` would panic.
+`#![async]` makes the block expand to an `async move { ... }` expression, which is why `.await` is valid inside rule bodies and why the block itself must be `.await`ed by the caller.
+
+`load_pokemon?` and `load_pokemon_moves?` are conditionless rules, so each fires exactly once per state entry in declaration order.
+
+`pokemon` is declared outside the block so it can be mutated by `load_pokemon?` and then read and returned by `load_pokemon_moves`.
+
+`#[trace]` on `@fetch_pokemon` emits a log entry on state entry and before each rule evaluation.
 
 ---
 
-### Double For Loop
-
-Demonstrates self-transitions and returning a tuple value.
-
+### Record Normalizer
+ 
+An async multi-pass normalization pipeline that demonstrates `#[banish::machine]` and an isolated error state. Records are loaded from a file asynchronously, normalized in place, and written back out. If the load fails, an isolated `@error` state handles the failure and exits cleanly.
+ 
+```toml
+[dependencies]
+banish = "1.3.0"
+tokio = { version = "1.50.0", features = ["full"] }
+```
+ 
 ```rust
 use banish::banish;
-
-fn main() {
-    let mut x = 0;
-    let mut y = 0;
-    let mut cnt = 0;
-
-    // Equivalent to:
-    // for y in 0..10 {
-    //     for x in 0..10 { cnt += 1; }
-    // }
-    let (x, y, cnt) = banish! {
-        @for_loops
-            for_x ? x != 10 {
-                x += 1;
-                cnt += 1;
-            } !? {
-                x = 0;
-                y += 1;
-                if y == 10 { return (x, y, cnt); }
-                => @for_loops;
+ 
+#[banish::machine]
+#[tokio::main]
+async fn main() {
+    banish! {
+        let mut records: Vec<String> = Vec::new();
+        let mut load_error: Option<String> = None;
+ 
+        @fetch
+            load? {
+                match tokio::fs::read_to_string("../records.txt").await {
+                    Ok(content) => {
+                        records = content.lines().map(str::to_string).collect();
+                    }
+                    Err(e) => {
+                        load_error = Some(e.to_string());
+                    }
+                }
             }
-    };
+
+            // Transition is a standalone statement here because transitions
+            // cannot appear inside nested blocks such as match arms.
+            bail ? load_error.is_some() { => @error; }
+ 
+        @normalize
+            trim ? records.iter().any(|r| r != r.trim()) {
+                records = records.into_iter().map(|r| r.trim().to_string()).collect();
+            }
+ 
+            lowercase ? records.iter().any(|r| r != &r.to_lowercase()) {
+                records = records.into_iter().map(|r| r.to_lowercase()).collect();
+            }
+ 
+            remove_empty ? records.iter().any(|r| r.is_empty()) {
+                records.retain(|r| !r.is_empty());
+            }
+ 
+        @finalize
+            dedup? {
+                records.sort();
+                records.dedup();
+                let output = records.join("\n");
+                tokio::fs::write("../records_clean.txt", output).await.expect("Write failed");
+                println!("Wrote {} records to records_clean.txt", records.len());
+                return;
+            }
+ 
+        #[isolate]
+        @error
+            handle? {
+                eprintln!("Failed to load records: {}", load_error.unwrap());
+                return;
+            }
+    }
 }
 ```
+ 
+`#[banish::machine]` injects `async` and `id = "normalize_records"` into the block attribute automatically, and drives the resulting future to completion with `.await`. Neither needs to be written by hand.
+ 
+`@fetch` loads the file and stores any error in `load_error` rather than transitioning directly from inside the match arm, which is not permitted.
 
-The fallback branch fires when `x == 10`. Fallback branches do not trigger re-evaluation, so `=> @for_loops` is required to restart the state.
+`bail` reads the flag and transitions to @error if it is set. This is the standard pattern for routing to an isolated state from within a conditionless rule that does async work.
+ 
+`@error` is isolated, so it is never entered by the implicit scheduler. It can only be reached via the explicit `=> @error` transition in `@fetch`. It must have a defined exit, in this case a `return`, because an isolated state with no exit is a compile error.
+ 
+`@normalize` re-evaluates until all three rules stop firing, converging when the records are fully trimmed, lowercased, and non-empty. `@finalize` sorts, deduplicates, and writes the result back to disk on a single conditionless pass, then returns.
 
 ---
 
-## Error Reference
-
-Banish validates the macro input at compile time and produces span-accurate errors pointing at the offending token.
-
-| Error | Cause | Fix |
-|---|---|---|
-| `Duplicate state name 'X'` | Two states share the same name. | Rename one of the states. |
-| `Duplicate rule name 'X' in state 'Y'` | Two rules in the same state share a name. | Rename one of the rules. |
-| `Unknown state 'X'` | A `=> @state` transition or `max_iter` redirect refers to an undeclared state. | Declare the state or fix the name. |
-| `Final state 'X' must have a return or state transition` | The last non-isolated state has no exit path. | Add `return` or `=> @state` to at least one rule. |
-| `Isolated state 'X' has no exit` | An isolated state has no `return`, `=> @state`, or `max_iter = N => @state`. | Add an exit path. `max_entry = N => @state` alone is not sufficient. |
-| `Unknown attribute 'X'` | An unrecognised attribute was used inside `#[...]`. | Check spelling against the supported attribute list. |
-| `Duplicate attribute 'X'` | The same attribute appears more than once in `#[...]`. | Remove the duplicate. |
-| `max_iter value must be greater than zero` | `max_iter = 0` was specified. | Use a value of at least 1. |
-| `max_entry value must be greater than zero` | `max_entry = 0` was specified. | Use a value of at least 1. |
-| `A state may only have one attribute block` | A state has two or more `#[...]` blocks. | Merge all attributes into a single comma-separated `#[...]` block. |
-| `Rule 'X' cannot have an '!?' clause without a condition` | A conditionless rule has a fallback branch. | Either add a condition to the rule or remove the `!?` block. |
+### Order Processing Pipeline
+ 
+A resumable order processing pipeline that demonstrates `#![dispatch(...)]`, `BanishDispatch`, a state-level variable, a guarded transition to an isolated error state.
+ 
+```rust
+use banish::banish;
+use banish::BanishDispatch;
+ 
+#[derive(BanishDispatch)]
+enum OrderStage {
+    Validate,
+    ApplyDiscounts,
+    Finalize,
+}
+ 
+struct LineItem {
+    name: &'static str,
+    quantity: u32,
+    unit_price_cents: u32,
+}
+ 
+struct Order {
+    id: &'static str,
+    customer: &'static str,
+    items: Vec<LineItem>,
+    coupon: Option<&'static str>,
+}
+ 
+fn process_order(order: Order, resume_from: OrderStage) {
+    banish! {
+        #![dispatch(resume_from)]
+ 
+        let subtotal_cents: u32 = order.items.iter()
+            .map(|i| i.quantity * i.unit_price_cents)
+            .sum();
+        let mut total_cents: u32 = subtotal_cents;
+        let mut discount_cents: u32 = 0;
+        let mut rejected: Option<&str> = None;
+ 
+        // Validate that every line item has a non-zero quantity and price.
+        // Uses a state-level variable to track which item is currently being
+        // checked so the rule can scan one item per pass.
+        @validate
+            let mut idx: usize = 0;
+ 
+            check ? idx < order.items.len() {
+                let item = &order.items[idx];
+                if item.quantity == 0 || item.unit_price_cents == 0 {
+                    rejected = Some(item.name);
+                }
+                idx += 1;
+            }
+ 
+            // Jump to @rejected if any item failed validation, otherwise
+            // fall through to @apply_discounts normally.
+            route? {
+                => @rejected if rejected.is_some();
+            }
+ 
+        @apply_discounts
+            // Apply a flat 10% loyalty discount for orders over $100.
+            loyalty? {
+                if subtotal_cents >= 10_000 {
+                    let loyalty_discount = subtotal_cents / 10;
+                    discount_cents += loyalty_discount;
+                    println!("  Loyalty discount: -${:.2}", loyalty_discount as f64 / 100.0);
+                }
+            }
+ 
+            // Apply coupon. "SAVE20" takes 20% off, "FIVE" takes $5 off.
+            coupon? {
+                if let Some(code) = order.coupon {
+                    let savings = match code {
+                        "SAVE20" => subtotal_cents / 5,
+                        "FIVE" => 500_u32.min(subtotal_cents),
+                        other => { println!("  Unknown coupon: {}", other); 0 }
+                    };
+                    discount_cents += savings;
+                    println!("  Coupon {}: -${:.2}", code, savings as f64 / 100.0);
+                }
+            }
+ 
+            apply? {
+                total_cents = subtotal_cents.saturating_sub(discount_cents);
+            }
+ 
+        @finalize
+            receipt? {
+                println!("\n  Order {}  --  {}", order.id, order.customer);
+                println!("  ----------------------------------------");
+                for item in &order.items {
+                    let line = item.quantity * item.unit_price_cents;
+                    println!(
+                        "  {:<20} x{}  ${:.2}",
+                        item.name, item.quantity, line as f64 / 100.0
+                    );
+                }
+                println!("  ----------------------------------------");
+                if discount_cents > 0 {
+                    println!("  Subtotal:              ${:.2}", subtotal_cents as f64 / 100.0);
+                    println!("  Discounts:            -${:.2}", discount_cents as f64 / 100.0);
+                }
+                println!("  Total:                 ${:.2}", total_cents as f64 / 100.0);
+                return;
+            }
+ 
+        #[isolate]
+        @rejected
+            handle? {
+                eprintln!(
+                    "\n  Order {} rejected: invalid line item {:?}",
+                    order.id,
+                    rejected.unwrap()
+                );
+                return;
+            }
+    }
+}
+ 
+fn main() {
+    println!("=== Full pipeline ===");
+    process_order(
+        Order {
+            id: "ORD-001",
+            customer: "Alice",
+            items: vec![
+                LineItem { name: "Mechanical Keyboard", quantity: 1, unit_price_cents: 8999 },
+                LineItem { name: "USB-C Cable", quantity: 3, unit_price_cents:  999 },
+                LineItem { name: "Desk Mat", quantity: 1, unit_price_cents: 2499 },
+            ],
+            coupon: Some("SAVE20"),
+        },
+        OrderStage::Validate,
+    );
+ 
+    println!("\n=== Resume from ApplyDiscounts (validation already passed) ===");
+    process_order(
+        Order {
+            id: "ORD-002",
+            customer: "Bob",
+            items: vec![
+                LineItem { name: "Monitor", quantity: 1, unit_price_cents: 29999 },
+                LineItem { name: "HDMI Cable", quantity: 2, unit_price_cents:  1499 },
+            ],
+            coupon: Some("FIVE"),
+        },
+        OrderStage::ApplyDiscounts,
+    );
+ 
+    println!("\n=== Invalid order (zero quantity) ===");
+    process_order(
+        Order {
+            id: "ORD-003",
+            customer: "Charlie",
+            items: vec![
+                LineItem { name: "Webcam", quantity: 0, unit_price_cents: 5999 },
+                LineItem { name: "Headset", quantity: 1, unit_price_cents: 7999 },
+            ],
+            coupon: None,
+        },
+        OrderStage::Validate,
+    );
+ 
+    println!("\n=== Jump straight to Finalize ===");
+    process_order(
+        Order {
+            id: "ORD-004",
+            customer: "Diana",
+            items: vec![
+                LineItem { name: "Mousepad", quantity: 1, unit_price_cents: 1999 },
+            ],
+            coupon: None,
+        },
+        OrderStage::Finalize,
+    );
+}
+```
+ 
+`#![dispatch(resume_from)]` selects the entry state at runtime from the `OrderStage` variant passed in. `#[derive(BanishDispatch)]` generates the `variant_name` implementation that maps each variant to its snake_case state name with no runtime allocation. `OrderStage::ApplyDiscounts` maps to `"apply_discounts"`, which matches `@apply_discounts` directly.
+ 
+`@validate` uses a state-level `idx` to scan one item per pass. Because `idx` is declared at state level it resets to zero on every entry, making the scan restartable. The `route?` rule uses a guarded transition to jump to the isolated `@rejected` state if any item failed -- because `rejected` is set inside a nested `if` block, the transition must be a separate standalone rule rather than inside the `check` body.
+ 
+`@apply_discounts` uses conditionless rules for `loyalty?`, `coupon?`, and `apply?`. Each needs to fire exactly once regardless of the result, so a conditionless rule is the right shape. A conditional rule would loop indefinitely because the conditions (`subtotal_cents >= 10_000`, `order.coupon.is_some()`) never change between passes.
+ 
+`@rejected` is isolated, so it is never entered by the implicit scheduler. It can only be reached via the explicit `=> @rejected` transition in `route?`.
+ 
+The four calls in `main` exercise every dispatch entry point and both exit paths. `@finalize` for success and `@rejected` for the invalid order.
 
 ---
 
 ## Known Limitations
 
-**Transitions are statement-level only.** `=> @state` must appear as a standalone statement inside a rule body or fallback branch. It cannot be used inside a nested block, closure, or `if` expression within a rule body. Use a top-level conditional rule instead.
+**Transitions cannot be used inside nested blocks or closures.** `=> @state` and `=> @state if condition` must appear as standalone statements inside a rule body or fallback branch. They cannot be used inside a nested `if`, closure, or other block within a rule body. For a single condition, use a guarded transition. For more complex branching, split the logic into separate conditional rules.
 
 ```rust
 // Does not work
 step? { if condition { => @other; } }
 
-// Works
+// Works: guarded transition handles the simple case
+step? { => @other if condition; }
+
+// Works: conditional rule handles anything else
 step ? condition { => @other; }
 ```
 

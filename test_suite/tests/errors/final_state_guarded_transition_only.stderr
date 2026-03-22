@@ -1,0 +1,5 @@
+error: Final state `foo` must have a return or state transition statement. Add `return` or `=> @state` to at least one rule
+ --> tests/errors/final_state_guarded_transition_only.rs:8:10
+  |
+8 |         @foo
+  |          ^^^

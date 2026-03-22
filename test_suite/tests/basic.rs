@@ -12,25 +12,6 @@ fn test_hello_world_completes() {
     }
 }
 
-// Verify that an isolated state with max_iter correctly exhausts and
-// transitions to the redirect target rather than looping forever.
-#[test]
-fn test_hello_world_with_max_iter_transition_completes() {
-    banish! {
-        #[isolate, trace, max_iter = 2 => @end]
-        @hello
-            print ? true {
-                println!("Hello, world!");
-            }
-
-        @end
-            print? {
-                println!("Goodbye, world!");
-                return;
-            }
-    }
-}
-
 /// Redirect fires on the (N+1)th entry, not the Nth.
 /// Redirect target receives control and can itself transition further.
 /// Verifies the redirect integrates correctly with the state scheduler.
@@ -95,4 +76,47 @@ fn continue_restarts_evaluation() {
 
     // inc fired 3 times, each time restarting from the top via continue
     assert_eq!(x, 3);
+}
+
+/// A guarded transition fires when its condition is true, jumping to the target
+/// state immediately. Statements after it in the rule body do not run.
+#[test]
+fn guarded_transition_fires_when_true() {
+    let mut x: u32 = 0;
+ 
+    x = banish! {
+        @a
+            go? {
+                x = 1;
+                => @b if x == 1;
+                x = 2; // must not run
+            }
+            done? { return x; }
+ 
+        @b
+            finish? { return x; }
+    };
+ 
+    assert_eq!(x, 1);
+}
+ 
+/// A guarded transition does nothing when its condition is false. Execution
+/// continues with the remaining statements in the rule body.
+#[test]
+fn guarded_transition_skips_when_false() {
+    let mut x: u32 = 0;
+ 
+    x = banish! {
+        @a
+            go? {
+                => @b if x != 0; // Shouldn't be true
+                x = 42;
+                return x;
+            }
+ 
+        @b
+            finish? { return 99; }
+    };
+ 
+    assert_eq!(x, 42);
 }

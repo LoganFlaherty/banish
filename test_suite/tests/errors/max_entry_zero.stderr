@@ -1,0 +1,5 @@
+error: `max_entry` value must be greater than zero
+ --> tests/errors/max_entry_zero.rs:5:23
+  |
+5 |         #[max_entry = 0]
+  |                       ^

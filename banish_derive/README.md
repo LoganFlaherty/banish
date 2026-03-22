@@ -6,7 +6,13 @@ This crate is the procedural macro implementation backing [`banish`](https://cra
 
 ```toml
 [dependencies]
-banish = "1.2.3"
+banish = "1.3.0"
+```
+
+Or with cargo:
+
+```
+cargo add banish
 ```
 
 `banish` re-exports everything you need. This crate is an implementation detail and its API is not considered stable outside of what `banish` exposes.

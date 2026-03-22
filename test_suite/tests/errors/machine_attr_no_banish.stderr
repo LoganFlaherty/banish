@@ -1,0 +1,19 @@
+error: Function `main` has `#[banish::machine]` but no `banish! {}` invocation in its body. Make sure `#[banish::machine]` is placed before any runtime attributes
+ --> tests/errors/machine_attr_no_banish.rs:4:4
+  |
+4 | fn main() {
+  |    ^^^^
+
+warning: unused import: `banish::banish`
+ --> tests/errors/machine_attr_no_banish.rs:1:5
+  |
+1 | use banish::banish;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/errors/machine_attr_no_banish.rs:6:2
+  |
+6 | }
+  |  ^ consider adding a `main` function to `$DIR/tests/errors/machine_attr_no_banish.rs`

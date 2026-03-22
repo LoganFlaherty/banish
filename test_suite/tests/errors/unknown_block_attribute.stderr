@@ -1,0 +1,5 @@
+error: Unknown block attribute `unknown_attr`. Expected attribute(s): `async`, `id`, `dispatch`, `trace`
+ --> tests/errors/unknown_block_attribute.rs:5:12
+  |
+5 |         #![unknown_attr]
+  |            ^^^^^^^^^^^^

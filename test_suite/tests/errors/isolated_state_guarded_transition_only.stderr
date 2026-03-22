@@ -1,0 +1,5 @@
+error: Isolated state `handler` must have a return or state transition statement. Add a `return`, `=> @state` transition, or `max_iter = N => @state` redirect
+  --> tests/errors/isolated_state_guarded_transition_only.rs:12:10
+   |
+12 |         @handler
+   |          ^^^^^^^
