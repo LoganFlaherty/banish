@@ -27,12 +27,12 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
     let rules = state.rules.iter().map(|func: &crate::parse_ast::Rule| {
         let rule_name: String = func.name.to_string();
         let body = func.body.iter().map(|stmt: &BanishStmt| generate_stmt(stmt, input));
-        let else_body = func.else_body.as_ref().map(|eb: &Vec<BanishStmt>| {
+        let fallback_body = func.fallback_body.as_ref().map(|eb: &Vec<BanishStmt>| {
             eb.iter().map(|stmt: &BanishStmt| generate_stmt(stmt, input))
         });
 
         let rule_body: proc_macro2::TokenStream = if let Some(condition) = &func.condition {
-            if let Some(else_body) = else_body {
+            if let Some(fallback_body) = fallback_body {
                 if trace {
                     quote! {
                         let __cond = #condition;
@@ -43,14 +43,14 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
                         if __cond {
                             __interaction = true;
                             #(#body)*
-                        } else { #(#else_body)* }
+                        } else { #(#fallback_body)* }
                     }
                 } else {
                     quote! {
                         if #condition {
                             __interaction = true;
                             #(#body)*
-                        } else { #(#else_body)* }
+                        } else { #(#fallback_body)* }
                     }
                 }
             } else {

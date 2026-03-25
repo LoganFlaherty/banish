@@ -70,8 +70,8 @@ pub fn validate_transition_targets(input: &Block) -> syn::Result<()> {
                     _ => {}
                 }
             }
-            if let Some(else_body) = &rule.else_body {
-                for stmt in else_body {
+            if let Some(fallback_body) = &rule.fallback_body {
+                for stmt in fallback_body {
                     match stmt {
                         BanishStmt::StateTransition(target) => check(target)?,
                         BanishStmt::GuardedStateTransition(target, _) => check(target)?,
@@ -98,7 +98,7 @@ pub fn validate_final_state_has_exit(input: &Block) -> syn::Result<()> {
                     _ => false,
                 });
             check_stmts(&rule.body)
-                || rule.else_body.as_ref().map_or(false, check_stmts)
+                || rule.fallback_body.as_ref().map_or(false, check_stmts)
         });
 
         if !has_exit {
@@ -133,7 +133,7 @@ pub fn validate_isolated_states(input: &Block) -> syn::Result<()> {
                     _ => false,
                 });
             check_stmts(&rule.body)
-            || rule.else_body.as_ref().map_or(false, check_stmts)
+            || rule.fallback_body.as_ref().map_or(false, check_stmts)
         });
 
         let has_max_iter_redirect: bool = matches!(&state.attrs.max_iter, Some((_, Some(_))));
@@ -217,7 +217,7 @@ pub fn validate_no_break_in_final_state(input: &Block) -> syn::Result<()> {
                 _ => false,
             });
 
-        if check_stmts(&rule.body) || rule.else_body.as_ref().map_or(false, check_stmts) {
+        if check_stmts(&rule.body) || rule.fallback_body.as_ref().map_or(false, check_stmts) {
             return Err(syn::Error::new(
                 rule.name.span(),
                 format!(

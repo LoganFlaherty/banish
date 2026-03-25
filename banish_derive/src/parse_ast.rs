@@ -84,7 +84,7 @@ pub struct Rule {
     pub name: Ident,
     pub condition: Option<Expr>,
     pub body: Vec<BanishStmt>,
-    pub else_body: Option<Vec<BanishStmt>>,
+    pub fallback_body: Option<Vec<BanishStmt>>,
 }
 
 pub enum BanishStmt {
@@ -172,11 +172,11 @@ impl Parse for Rule {
         let content: syn::parse::ParseBuffer<'_>;
         braced!(content in input);
 
-        let body: Vec<BanishStmt> = parse_rule_block(&content)?;
-        let else_body: Option<Vec<BanishStmt>> = parse_rule_else_block(input)?;
+        let body: Vec<BanishStmt> = parse_rule_body(&content)?;
+        let fallback_body: Option<Vec<BanishStmt>> = parse_rule_fallback_body(input)?;
 
         // If there is an '!?' clause, there must be a condition.
-        if condition.is_none() && else_body.is_some() {
+        if condition.is_none() && fallback_body.is_some() {
             return Err(syn::Error::new(
                 name.span(),
                 format!(
@@ -186,7 +186,7 @@ impl Parse for Rule {
             ));
         }
 
-        Ok(Rule { name, condition, body, else_body })
+        Ok(Rule { name, condition, body, fallback_body })
     }
 }
 
@@ -364,7 +364,7 @@ fn parse_rule_condition(input: &syn::parse::ParseBuffer) -> Result<Option<Expr>>
     }
 }
 
-fn parse_rule_block(content: &syn::parse::ParseBuffer) -> Result<Vec<BanishStmt>> {
+fn parse_rule_body(content: &syn::parse::ParseBuffer) -> Result<Vec<BanishStmt>> {
     let mut body: Vec<BanishStmt> = Vec::new();
  
     while !content.is_empty() {
@@ -400,13 +400,13 @@ fn parse_rule_block(content: &syn::parse::ParseBuffer) -> Result<Vec<BanishStmt>
     Ok(body)
 }
 
-fn parse_rule_else_block(input: &syn::parse::ParseBuffer) -> Result<Option<Vec<BanishStmt>>> {
+fn parse_rule_fallback_body(input: &syn::parse::ParseBuffer) -> Result<Option<Vec<BanishStmt>>> {
     if input.peek(Token![!]) {
         input.parse::<Token![!]>()?;
         input.parse::<Token![?]>()?;
 
-        let else_content: syn::parse::ParseBuffer<'_>;
-        braced!(else_content in input);
-        Ok(Some(parse_rule_block(&else_content)?))
+        let fallback_content: syn::parse::ParseBuffer<'_>;
+        braced!(fallback_content in input);
+        Ok(Some(parse_rule_body(&fallback_content)?))
     } else { Ok(None) }
 }
