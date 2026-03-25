@@ -586,7 +586,7 @@ The returned string must match a declared state name exactly. Returning a name t
 
 ## Function Attributes
  
-Function attributes are declared on `fn` items using outer attribute syntax and modify how the function interacts with its `banish!` block. They are distinct from block attributes, which are written inside the `banish!` block with `#![...]`.
+Function attributes are declared on `fn` items using outer attribute syntax and modify how the function interacts with its `banish!` block. They are distinct from block attributes.
  
 ---
  
@@ -594,13 +594,13 @@ Function attributes are declared on `fn` items using outer attribute syntax and 
  
 A setup attribute that reduces boilerplate for functions whose body contains a `banish!` block. It does three things automatically:
  
-**Injects `async` into the block attribute** when applied to an `async fn`, so `#![async]` does not need to be written manually. Writing it explicitly is also fine. The attribute detects it and skips injection.
+**Injects `async` into the block attribute** when applied to an `async fn`, so `#![async]` does not need to be written manually.
 
-**Injects `.await` on the `banish!` expression** when the function is async, so the future produced by `#![async]` is driven to completion automatically. If `.await` is already present it is left alone.
+**Injects `.await` on the `banish!` expression** when the function is async, so the future produced by `#![async]` is driven to completion automatically.
  
 **Sets `id` to the function name** so trace output is labelled without any extra boilerplate. Can be overridden by writing `#![id = "name"]` inside the `banish!` block explicitly.
  
-Injections don't happen if the corresponding item is already present. `#[banish::machine]` is purely additive.
+Injections are ignored if the corresponding item is already present. `#[banish::machine]` is purely additive.
  
 ```rust,ignore
 // Before
@@ -635,22 +635,7 @@ async fn main() {
 }
 ```
  
-**Placement of `banish!`.** The `banish!` invocation can appear anywhere in the function body as a standalone statement, a tail expression, or a `let` binding:
- 
-```rust,ignore
-#[banish::machine]
-#[tokio::main]
-async fn main() {
-    setup();
-    let result = banish! {
-        @grade
-            pass ? score >= 60 { return "pass"; } !? { return "fail"; }
-    };
-    println!("{}", result);
-}
-```
- 
-**`#[banish::machine]` takes no arguments.** All block-level configuration belongs inside `#![...]` within the `banish!` block, exactly as it does without the attribute. The function attribute only handles the two injections described above.
+**`#[banish::machine]` takes no arguments.** All block-level configuration belongs inside `#![...]` within the `banish!` block, exactly as it does without the attribute.
 
 ---
 

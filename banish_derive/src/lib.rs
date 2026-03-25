@@ -90,7 +90,7 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             let arms: Vec<proc_macro2::TokenStream> = input.states.iter()
                 .enumerate()
                 .map(|(i, state)| {
-                    let name: String = pascal_to_snake(&state.name.to_string());
+                    let name: String = pascal_to_snake_case(&state.name.to_string());
                     let idx: syn::Index = syn::Index::from(i);
                     quote! { #name => #idx }
                 })
@@ -186,7 +186,7 @@ pub fn derive_banish_dispatch(input: proc_macro::TokenStream) -> proc_macro::Tok
  
     let arms: Vec<proc_macro2::TokenStream> = variants.iter().map(|v| {
         let variant_ident: &syn::Ident = &v.ident;
-        let snake: String = pascal_to_snake(&variant_ident.to_string());
+        let snake: String = pascal_to_snake_case(&variant_ident.to_string());
  
         let pattern = match &v.fields {
             syn::Fields::Unit => quote! { #name::#variant_ident },
@@ -252,13 +252,27 @@ pub fn machine(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> 
 /// used to produce the match arm strings for `#![dispatch(...)]`.
 ///
 /// `Normalize` -> `normalize`
-fn pascal_to_snake(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 4);
-    for (i, ch) in s.chars().enumerate() {
-        if ch.is_uppercase() && i != 0 {
-            out.push('_');
+/// `HTTP` -> `http`
+fn pascal_to_snake_case(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out: String = String::with_capacity(s.len() + 4);
+
+    for i in 0..chars.len() {
+        let ch: char = chars[i];
+        
+        if ch.is_uppercase() && i > 0 {
+            let prev: char = chars[i - 1];
+            let next: Option<&char> = chars.get(i + 1);
+
+            // Add an underscore if the current uppercase letter is preceded by a lowercase letter,
+            // or if it is followed by a lowercase letter.
+            if prev.is_lowercase() || next.map_or(false, |n| n.is_lowercase()) {
+                out.push('_');
+            }
         }
+        
         out.extend(ch.to_lowercase());
     }
+    
     out
 }

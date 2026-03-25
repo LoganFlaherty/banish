@@ -120,7 +120,7 @@ The manual version requires you to declare the enum, wire up the entry counter, 
 
 ```toml
 [dependencies]
-banish = "1.3.0"
+banish = "1.3.1"
 ```
 
 Or with cargo:
@@ -272,7 +272,7 @@ If you need full control over log routing or filtering, skip `init_trace` and in
 * The [Record Normalizer](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#record-normalizer) example is an async multi-pass normalization pipeline that demonstrates `#[banish::machine]` and an isolated error state. Records are loaded from a file asynchronously, normalized in place, and written back out. If the load fails, an isolated `@error` state handles the failure and exits cleanly.
 * The [Order Processing Pipeline](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#order-processing-pipeline) example is a resumable order processing pipeline that demonstrates `#![dispatch(...)]`, `BanishDispatch`, state-level variables, guarded transitions, and conditionless rules. Orders can be resumed from any stage by dispatching into the pipeline with the appropriate `OrderStage` variant.
 
-For a full treatment of every feature and attribute, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
+For a full treatment of every feature, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 
 ## Contributing
 
