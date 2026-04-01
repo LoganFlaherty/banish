@@ -30,7 +30,7 @@ All of this is generated at compile time. There is no runtime interpreter, alloc
 
 A state is declared with `@name` and contains one or more rules. States are evaluated in declaration order by the implicit scheduler.
 
-```rust,ignore
+```rust
 banish! {
     @first
         // Rules
@@ -58,7 +58,7 @@ name ? condition { body }
 
 A rule fires when `condition` evaluates to `true`. The condition is any Rust expression that evaluates to `bool`. After firing, the state re-evaluates from the top. If the condition is `false`, the rule is skipped silently.
 
-```rust,ignore
+```
 @process
     clamp ? value > 100 { value = 100; }
 
@@ -73,7 +73,7 @@ name ? { body }
 
 A conditionless rule fires exactly once per state entry, on the first pass only. It sets `__interaction = true` on that pass, causing the state to re-evaluate, but it will not fire again on subsequent passes within the same entry. Conditionless rules cannot have a fallback branch.
 
-```rust,ignore
+```
 @setup
     init? {
         value = compute();
@@ -90,7 +90,7 @@ name ? condition { body } !? { else_body }
 
 A fallback branch runs when the rule's condition is `false`. Unlike the rule body, a fallback branch does **not** set `__interaction = true`. It does not trigger a re-evaluation pass on its own. If you need to loop after a fallback, use an explicit `=> @state` transition.
 
-```rust,ignore
+```
 @check
     valid ? value > 0 {
         println!("Valid: {}", value);
@@ -100,6 +100,24 @@ A fallback branch runs when the rule's condition is `false`. Unlike the rule bod
         => @check; // Explicit re-entry needed here
     }
 ```
+
+### Pattern Conditions
+
+```
+name ? let Pat = expr { body }
+name ? let Pat = expr { body } !? { else_body }
+```
+
+A pattern condition uses `if let` semantics. The rule fires when the pattern matches, binding any captured variables into the rule body. If the pattern does not match the rule is skipped silently or, if a fallback branch is present, the fallback runs instead.
+
+```
+@drain
+    pop ? let Some(val) = queue.pop() {
+        sum += val;
+    } !? { return sum; }
+```
+
+Any irrefutable-ish pattern valid in `if let` is valid here: `Some(x)`, `Ok(val)`, tuple structs, `(a, b)`, and so on. Because the match result cannot be coerced to `bool`, `trace` diagnostics for pattern rules are emitted inside each branch rather than before the check.
 
 **Rule ordering matters.** Rules are evaluated top to bottom on every pass. A rule earlier in the list can change state that affects whether a later rule fires. Design rule order accordingly.
 
@@ -115,7 +133,7 @@ Plain Rust `let` declarations can be placed at two scopes: directly inside the `
  
 Block-level declarations appear after the `#![...]` attribute block (if present) and before the first state. They are emitted inside the generated closure or async block and live for the entire lifetime of the machine, accessible from every state and rule.
  
-```rust,ignore
+```
 banish! {
     let mut count: u32 = 0;
     let threshold = 10;
@@ -133,7 +151,7 @@ Variables declared here behave identically to variables declared outside the blo
  
 State-level declarations appear after the `@name` line and before any rules. They are re-initialized on every entry to the state, making them suitable for per-pass scratch values that do not need to persist across entries.
  
-```rust,ignore
+```
 banish! {
     @process
         let mut dirty = false;
@@ -169,7 +187,7 @@ Once a state reaches its fixed point, the machine automatically advances to the 
 
 An explicit transition immediately jumps to the named state, bypassing the implicit scheduler. It must appear as a standalone statement in a rule body or fallback branch. The remaining rules in the current pass are abandoned and the target state begins a fresh evaluation.
 
-```rust,ignore
+```
 @yellow
     timer ? ticks < 10 {
         ticks += 1;
@@ -189,7 +207,7 @@ Transition targets must refer to a declared state name. Unknown targets are a co
 
 A guarded transition jumps to the named state only when `condition` evaluates to `true`. If the condition is `false`, the statement is a no-op and execution continues with the remaining statements in the rule body. Like an explicit transition, it must appear as a standalone statement.
 
-```rust,ignore
+```
 @process
     step? {
         do_work();
@@ -211,7 +229,7 @@ Because rule bodies are plain Rust, the native loop control keywords work as-is 
 - `break;` exits the current state's loop immediately, skipping any remaining rules and passes, and lets the scheduler advance to the next state normally.
 - `continue;` abandons the remainder of the current pass and restarts rule evaluation from the top, equivalent to a rule firing and setting `__interaction = true` manually.
 
-```rust,ignore
+```
 @process
     step ? !done { do_work(); }
 
@@ -224,7 +242,7 @@ Because rule bodies are plain Rust, the native loop control keywords work as-is 
 
 `return` exits the entire `banish!` block immediately, optionally with a value. The block evaluates to that value, so it can be assigned or returned from an enclosing function.
  
-```rust,ignore
+```
 let result: &str = banish! {
     @grade
         pass ? score >= 60 {
@@ -237,7 +255,7 @@ The return type is inferred by the Rust compiler from the `return` expressions i
  
 When `banish!` is the tail expression of a function, its value is the function's return value implicitly. `return` inside the block exits the generated closure, and the closure's value becomes the function's result.
  
-```rust,ignore
+```
 fn classify(score: u32) -> &'static str {
     banish! {
         @grade
@@ -254,7 +272,7 @@ fn classify(score: u32) -> &'static str {
 
 Attributes are declared above a state and modify its runtime behavior. Multiple attributes are comma-separated.
 
-```rust,ignore
+```
 #[isolate, max_iter = 10 => @fallback, trace]
 @my_state
     // Rules
@@ -267,7 +285,7 @@ Attributes are declared above a state and modify its runtime behavior. Multiple 
 
 Removes the state from implicit scheduling. An isolated state is never entered by the scheduler. It can only be reached via an explicit `=> @state` transition.
 
-```rust,ignore
+```
 banish! {
     @main
         trigger ? condition {
@@ -291,7 +309,7 @@ banish! {
 
 Caps the fixed-point loop to `N` iterations. If the state has not converged after `N` iterations, the loop exits and the machine advances to the next state normally.
 
-```rust,ignore
+```
 #[max_iter = 5]
 @process
     step ? !done { do_work(); }
@@ -305,7 +323,7 @@ Useful as a safety net on states that could theoretically loop many times, or to
 
 Same as `max_iter = N`, but instead of advancing normally on exhaustion, the machine transitions to the named state.
 
-```rust,ignore
+```
 #[max_iter = 3 => @timeout]
 @retry
     attempt ? !succeeded { try_request(); }
@@ -323,7 +341,7 @@ When a redirect is present, the state's `scheduler_advance` is never emitted. Th
 
 Limits the number of times a state can be entered. On the `(N+1)`th entry the state returns immediately without evaluating any rules.
 
-```rust,ignore
+```
 #[max_entry = 2]
 @red
     announce? { println!("Red light"); ticks = 0; }
@@ -341,7 +359,7 @@ In the traffic light example above, the machine exits after `@red` is entered a 
 
 Emits diagnostics via [`log::trace!`](https://docs.rs/log) on state entry and before each rule evaluation. Requires a backend to capture output. Without one, diagnostics are silently discarded.
  
-```rust,ignore
+```
 #[trace]
 @compute
     step_a ? x > 0  { x -= 1; }
@@ -360,12 +378,12 @@ The simplest way to enable trace output is `banish::init_trace`, available behin
  
 ```toml
 [dependencies]
-banish = { version = "1.x", features = ["trace-logger"] }
+banish = { version = "1.4.0", features = ["trace-logger"] }
 ```
  
 Call it once at the start of `main`. Pass `Some("file path")` to write output to a file, or pass `None` to print to stderr:
  
-```rust,ignore
+```
 fn main() {
     banish::init_trace(Some("trace.log")); // write to file
     // banish::init_trace(None); // print to stderr
@@ -381,7 +399,7 @@ fn main() {
  
 Block attributes are declared at the top of a `banish!` block using inner attribute syntax and modify the behavior of the entire block. Multiple attributes are comma-separated.
  
-```rust,ignore
+```
 banish! {
     #![async, id = "fetcher"]
  
@@ -400,7 +418,7 @@ The `#![...]` line must appear before the first state declaration. Only one `#![
  
 Expands the `banish!` block to an `async move { ... }` expression instead of an immediately invoked closure. The result is a `Future` and must be `.await`ed by the caller.
  
-```rust,ignore
+```
 let result = banish! {
     #![async]
  
@@ -418,7 +436,7 @@ let result = banish! {
  
 **Return values** work the same way as in a synchronous block. `return expr;` exits the block with a value; the resolved type of the `Future` is inferred from the `return` expressions.
  
-```rust,ignore
+```
 #[tokio::main]
 async fn main() {
     let status: &str = banish! {
@@ -443,7 +461,7 @@ async fn main() {
 
 Sets a display name for this machine that is included in all `trace` output. Without `id`, trace lines are prefixed with `[banish]`. With `id`, they are prefixed with `[banish:name]`.
 
-```rust,ignore
+```
 banish! {
     #![id = "lexer"]
 
@@ -470,7 +488,7 @@ This is most useful when multiple `banish!` blocks emit trace output in the same
  
 Sets the entry state dynamically at runtime by matching the variant name of `expr` against the declared state names. The entry state is no longer fixed at compile time. It is resolved on each invocation from the value of `expr`.
  
-```rust,ignore
+```
 let entry = PipelineState::Validate;
 banish! {
     #![dispatch(entry)]
@@ -492,7 +510,7 @@ The enum passed to `dispatch` must implement `BanishDispatch`, which maps each v
  
 **Variants with data** are supported. The data is ignored. Only the variant name is used for dispatch. If you need the data, extract it before the block:
  
-```rust,ignore
+```
 let payload = match &entry {
     PipelineState::Resume(data) => Some(data),
     _ => None,
@@ -506,7 +524,7 @@ banish! {
  
 **Combining with other block attributes** works normally. `dispatch` can appear alongside `async` and `id` in the same `#![...]` line:
  
-```rust,ignore
+```
 banish! {
     #![async, id = "pipeline", dispatch(entry)]
     ...
@@ -519,7 +537,7 @@ banish! {
  
 Enables trace diagnostics on every state in the block. Equivalent to placing `#[trace]` on each state individually. See the [`trace`](#trace) state attribute for output format and backend setup.
  
-```rust,ignore
+```
 banish! {
     #![trace, id = "pipeline"]
  
@@ -539,7 +557,7 @@ State-level `#[trace]` continues to work alongside `#![trace]` and is redundant 
  
 `BanishDispatch` is a trait used by `#![dispatch(expr)]` to resolve a variant name at runtime. It has a single method:
  
-```rust,ignore
+```
 pub trait BanishDispatch {
     fn variant_name(&self) -> &'static str;
 }
@@ -551,7 +569,7 @@ pub trait BanishDispatch {
  
 `#[derive(BanishDispatch)]` generates the implementation automatically. All variant kinds are supported. Unit, tuple, and struct variants all produce the correct name. Data fields are ignored.
  
-```rust,ignore
+```
 use banish::BanishDispatch;
  
 #[derive(BanishDispatch)]
@@ -567,7 +585,7 @@ enum PipelineState {
  
 If you need custom naming or are not using the derive macro:
  
-```rust,ignore
+```
 impl BanishDispatch for PipelineState {
     fn variant_name(&self) -> &'static str {
         match self {
@@ -602,7 +620,7 @@ A setup attribute that reduces boilerplate for functions whose body contains a `
  
 Injections are ignored if the corresponding item is already present. `#[banish::machine]` is purely additive.
  
-```rust,ignore
+```,ignore
 // Before
 #[tokio::main]
 async fn normalizer() {
@@ -627,7 +645,7 @@ async fn normalizer() {
  
 **Attribute ordering.** `#[banish::machine]` must come before any runtime attribute such as `#[tokio::main]`. Attributes apply top to bottom. `#[banish::machine]` must see the original `async fn` before the runtime transforms it, otherwise it cannot locate the `banish!` block.
  
-```rust,ignore
+```,ignore
 #[banish::machine]  // must be first
 #[tokio::main]
 async fn main() {
@@ -645,7 +663,7 @@ async fn main() {
 
 A simple state machine that demonstrates implicit and explicit state transition, block variables, conditionless rules, fallback branches, and using the state attribute `max_entry`.
 
-```rust,ignore
+```
 use banish::banish;
 
 fn main() {
@@ -693,7 +711,7 @@ A turn-based battle that demonstrates early return with a value, external crate 
 rand = "0.10.0"
 ```
 
-```rust,ignore
+```
 use banish::banish;
 use rand::prelude::*;
 
@@ -755,7 +773,7 @@ serde = { version = "1.0.288", features = ["derive"] }
 env_logger = "0.11.9"
 ```
 
-```rust,ignore
+```
 use banish::banish;
 use serde::Deserialize;
 
@@ -851,7 +869,7 @@ banish = "1.3.0"
 tokio = { version = "1.50.0", features = ["full"] }
 ```
  
-```rust,ignore
+```
 use banish::banish;
  
 #[banish::machine]
@@ -926,7 +944,7 @@ async fn main() {
  
 A resumable order processing pipeline that demonstrates `#![dispatch(...)]`, `BanishDispatch`, a state-level variable, a guarded transition to an isolated error state.
  
-```rust,ignore
+```
 use banish::banish;
 use banish::BanishDispatch;
  
@@ -1112,11 +1130,28 @@ The four calls in `main` exercise every dispatch entry point and both exit paths
 
 ---
 
+## `no_std` Support
+
+Banish is `no_std` compatible. The core crate declares `#![no_std]` and has no dependency on the standard library at compile time.
+
+The one exception is the `trace-logger` feature. It pulls in [`env_logger`](https://docs.rs/env_logger), which requires `std` for file I/O and environment variable access. If you are targeting a `no_std` environment, simply omit this feature:
+
+```toml
+[dependencies]
+banish = "1.4.0"  # no features = no std dependency
+```
+
+Everything else, the `banish!` macro, `BanishDispatch`, state attributes, dispatch, async, and tracing via the `log` facade, works in `no_std` environments. The `log` crate itself is `no_std` compatible and will forward diagnostics to whatever backend is registered.
+
+**Bring your own backend:** in `no_std` contexts you are responsible for registering a `log`-compatible backend that works on your target. Banish emits all trace diagnostics through `log::trace!` and has no opinion about where they go.
+
+---
+
 ## Known Limitations
 
 **Transitions cannot be used inside nested blocks or closures.** `=> @state` and `=> @state if condition` must appear as standalone statements inside a rule body or fallback branch. They cannot be used inside a nested `if`, closure, or other block within a rule body. For a single condition, use a guarded transition. For more complex branching, split the logic into separate conditional rules.
 
-```rust,ignore
+```
 // Does not work
 step? { if condition { => @other; } }
 
