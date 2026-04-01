@@ -49,6 +49,7 @@ fn main() {
 * **Generated Runtime:** Banish generates a fixed-point runtime at compile time and schedules your states through it. Rules fire when their conditions are met, not when you call them. The scheduler, interaction tracking, and state advancement are all handled for you.
 * **Flexible Transitions:** States advance implicitly in declaration order by default. Explicit `=> @state` transitions let you jump anywhere when you need to.
 * **Runtime Dispatch:** `#![dispatch(expr)]` and the `BanishDispatch` trait let external enums determine the entry state at runtime, making machines resumable and configurable without any extra wiring.
+* **`no_std` Compatible:** Works in embedded and bare-metal environments. The `trace-logger` feature requires `std`; everything else does not.
 * **Async-Runtime-Agnostic:** Works with tokio, async-std, smol, or anything else that can drive a future. No integration code required.
 * **Full Rust Integration:** Rule bodies are plain Rust. Closures, external crates, mutable references. Everything works as you'd expect.
 * **Self-Documenting Structure:** Named states and named rules make the shape of your logic readable at a glance, without requiring comments to explain what each block is doing.
@@ -120,7 +121,7 @@ The manual version requires you to declare the enum, wire up the entry counter, 
 
 ```toml
 [dependencies]
-banish = "1.3.1"
+banish = "1.3.2"
 ```
 
 Or with cargo:
@@ -250,7 +251,7 @@ The `trace` attribute emits diagnostics through the [`log`](https://docs.rs/log)
  
 ```toml
 [dependencies]
-banish = { version = "1.x", features = ["trace-logger"] }
+banish = { version = "1.3.2", features = ["trace-logger"] }
 ```
  
 Call it once at the start of `main`. Pass `Some("file path")` to write output to a file, or pass `None` to print to stderr:

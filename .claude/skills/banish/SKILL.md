@@ -12,7 +12,7 @@ state advancement at compile time.
 
 ```toml
 [dependencies]
-banish = "1.3.1"
+banish = "1.3.2"
 ```
 
 ---
@@ -210,7 +210,7 @@ state **panics at runtime**.
 ## Tracing
 
 ```toml
-banish = { version = "1.3.1", features = ["trace-logger"] }
+banish = { version = "1.3.2", features = ["trace-logger"] }
 ```
 
 ```rust

@@ -1132,12 +1132,21 @@ step ? condition { => @other; }
 **Rule names are identifiers, not strings.** They exist for readability and error messages only. They cannot be inspected or matched at runtime.
 */
 
+#![no_std]
+
+#[cfg(feature = "trace-logger")]
+extern crate std;
+
 mod banish_dispatch;
 
 pub use banish_derive::{ banish, machine, BanishDispatch };
 pub use banish_dispatch::BanishDispatch;
 pub use log;
+
+#[cfg(feature = "trace-logger")]
 use std::fs::File;
+#[cfg(feature = "trace-logger")]
+use std::boxed::Box;
 
 /// Initialises banish's built-in trace logger.
 ///
