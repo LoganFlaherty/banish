@@ -1,6 +1,6 @@
 use proc_macro2::TokenTree;
 use syn::{
-    Expr, Ident, LitInt, Result, Stmt, Token, braced, bracketed,
+    Expr, Ident, LitInt, Pat, Result, Stmt, Token, braced, bracketed,
     parse::{Parse, ParseStream},
 };
 
@@ -73,18 +73,26 @@ pub struct State {
 #[derive(Default)]
 pub struct StateAttrs {
     pub isolate: bool,
+
     /// `(iteration_cap, optional_state_transition_on_exhaustion)`
     pub max_iter: Option<(usize, Option<Ident>)>,
+
     /// `(entry_cap, optional_state_transition_on_exhaustion)`
     pub max_entry: Option<(usize, Option<Ident>)>,
+    
     pub trace: bool,
 }
 
 pub struct Rule {
     pub name: Ident,
-    pub condition: Option<Expr>,
+    pub condition: Option<RuleCondition>,
     pub body: Vec<BanishStmt>,
     pub fallback_body: Option<Vec<BanishStmt>>,
+}
+
+pub enum RuleCondition {
+    Bool(Expr),
+    LetPat { pat: Pat, expr: Expr },
 }
 
 pub enum BanishStmt {
@@ -165,9 +173,9 @@ impl Parse for State {
 impl Parse for Rule {
     fn parse(input: ParseStream) -> Result<Self> {
         let name: Ident = input.parse()?;
-    
+
         input.parse::<Token![?]>()?;
-        let condition: Option<Expr> = parse_rule_condition(input)?;
+        let condition: Option<RuleCondition> = parse_rule_condition(input)?;
 
         let content: syn::parse::ParseBuffer<'_>;
         braced!(content in input);
@@ -346,21 +354,31 @@ fn parse_state_attrs(content: &syn::parse::ParseBuffer) -> Result<StateAttrs> {
     Ok(attrs)
 }
 
-fn parse_rule_condition(input: &syn::parse::ParseBuffer) -> Result<Option<Expr>> {
-    if input.peek(syn::token::Brace) { Ok(None) }
-    else {
-        let mut cond_tokens: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
-        
-        // Loop until the start of the body block
+fn parse_rule_condition(input: &syn::parse::ParseBuffer) -> Result<Option<RuleCondition>> {
+    if input.peek(syn::token::Brace) {
+        Ok(None)
+    } else if input.peek(Token![let]) {
+        input.parse::<Token![let]>()?;
+        let pat: Pat = Pat::parse_single(input)?;
+        input.parse::<Token![=]>()?;
+        let mut expr_tokens: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
         while !input.peek(syn::token::Brace) {
             if input.is_empty() {
                 return Err(input.error("Unexpected end of input, expected rule body `{`"));
             }
-            // Pull one token at a time
+            expr_tokens.extend(std::iter::once(input.parse::<TokenTree>()?));
+        }
+        let expr: Expr = syn::parse2(expr_tokens)?;
+        Ok(Some(RuleCondition::LetPat { pat, expr }))
+    } else {
+        let mut cond_tokens: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
+        while !input.peek(syn::token::Brace) {
+            if input.is_empty() {
+                return Err(input.error("Unexpected end of input, expected rule body `{`"));
+            }
             cond_tokens.extend(std::iter::once(input.parse::<TokenTree>()?));
         }
-        
-        Ok(Some(syn::parse2(cond_tokens)?))
+        Ok(Some(RuleCondition::Bool(syn::parse2(cond_tokens)?)))
     }
 }
 
