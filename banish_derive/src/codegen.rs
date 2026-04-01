@@ -1,5 +1,5 @@
 use quote::quote;
-use crate::parse_ast::{ Block, State, BanishStmt };
+use crate::parse_ast::{ Block, State, BanishStmt, RuleCondition };
 
 
 /// Returns a stable identifier for the `max_entry` counter of state `index`.
@@ -32,45 +32,99 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
         });
 
         let rule_body: proc_macro2::TokenStream = if let Some(condition) = &func.condition {
-            if let Some(fallback_body) = fallback_body {
-                if trace {
-                    quote! {
-                        let __cond = #condition;
-                        ::banish::log::trace!(
-                            "{} rule `{}`: condition = {}",
-                            #trace_prefix, #rule_name, __cond
-                        );
-                        if __cond {
-                            __interaction = true;
-                            #(#body)*
-                        } else { #(#fallback_body)* }
-                    }
-                } else {
-                    quote! {
-                        if #condition {
-                            __interaction = true;
-                            #(#body)*
-                        } else { #(#fallback_body)* }
-                    }
-                }
-            } else {
-                if trace {
-                    quote! {
-                        let __cond = #condition;
-                        ::banish::log::trace!(
-                            "{} rule `{}`: condition = {}",
-                            #trace_prefix, #rule_name, __cond
-                        );
-                        if __cond {
-                            __interaction = true;
-                            #(#body)*
+            match condition {
+                RuleCondition::Bool(cond_expr) => {
+                    if let Some(fallback_body) = fallback_body {
+                        if trace {
+                            quote! {
+                                let __cond = #cond_expr;
+                                ::banish::log::trace!(
+                                    "{} rule `{}`: condition = {}",
+                                    #trace_prefix, #rule_name, __cond
+                                );
+                                if __cond {
+                                    __interaction = true;
+                                    #(#body)*
+                                } else { #(#fallback_body)* }
+                            }
+                        } else {
+                            quote! {
+                                if #cond_expr {
+                                    __interaction = true;
+                                    #(#body)*
+                                } else { #(#fallback_body)* }
+                            }
+                        }
+                    } else if trace {
+                        quote! {
+                            let __cond = #cond_expr;
+                            ::banish::log::trace!(
+                                "{} rule `{}`: condition = {}",
+                                #trace_prefix, #rule_name, __cond
+                            );
+                            if __cond {
+                                __interaction = true;
+                                #(#body)*
+                            }
+                        }
+                    } else {
+                        quote! {
+                            if #cond_expr {
+                                __interaction = true;
+                                #(#body)*
+                            }
                         }
                     }
-                } else {
-                    quote! {
-                        if #condition {
-                            __interaction = true;
-                            #(#body)*
+                }
+                RuleCondition::LetPat { pat, expr } => {
+                    if let Some(fallback_body) = fallback_body {
+                        if trace {
+                            quote! {
+                                if let #pat = #expr {
+                                    ::banish::log::trace!(
+                                        "{} rule `{}`: condition = true",
+                                        #trace_prefix, #rule_name
+                                    );
+                                    __interaction = true;
+                                    #(#body)*
+                                } else {
+                                    ::banish::log::trace!(
+                                        "{} rule `{}`: condition = false",
+                                        #trace_prefix, #rule_name
+                                    );
+                                    #(#fallback_body)*
+                                }
+                            }
+                        } else {
+                            quote! {
+                                if let #pat = #expr {
+                                    __interaction = true;
+                                    #(#body)*
+                                } else { #(#fallback_body)* }
+                            }
+                        }
+                    } else if trace {
+                        quote! {
+                            if let #pat = #expr {
+                                ::banish::log::trace!(
+                                    "{} rule `{}`: condition = true",
+                                    #trace_prefix, #rule_name
+                                );
+                                __interaction = true;
+                                #(#body)*
+                            } else {
+                                ::banish::log::trace!(
+                                    "{} rule `{}`: condition = false",
+                                    #trace_prefix, #rule_name
+                                );
+                            }
+                        }
+                    } else {
+                        quote! {
+                            if let #pat = #expr {
+                                __interaction = true;
+                                #(#body)*
+                            }
                         }
                     }
                 }

@@ -121,7 +121,7 @@ The manual version requires you to declare the enum, wire up the entry counter, 
 
 ```toml
 [dependencies]
-banish = "1.3.2"
+banish = "1.4.0"
 ```
 
 Or with cargo:
@@ -135,6 +135,15 @@ cargo add banish
 **States** (`@name`) group related rules. The machine starts at the first declared non-isolated state and advances through them in order.
 
 **Rules** (`name ? condition { body }`) fire when their condition is true. After firing, the state re-evaluates from the top. Once a full pass completes with no rules firing, the state has reached its fixed point and the machine advances.
+
+**Pattern conditions** (`name ? let Pat = expr { body }`) use `if let` semantics. The rule fires when the pattern matches, binding variables into the rule body. Useful for consuming iterators, popping queues, or matching enum variants:
+
+```rust
+@drain
+    pop ? let Some(val) = queue.pop() {
+        sum += val;
+    } !? { return sum; }
+```
 
 **Variables** (`let`) can be declared at block level before the first state, living for the entire machine lifetime, or at state level before the first rule, re-initializing on every entry to that state.
 
@@ -251,7 +260,7 @@ The `trace` attribute emits diagnostics through the [`log`](https://docs.rs/log)
  
 ```toml
 [dependencies]
-banish = { version = "1.3.2", features = ["trace-logger"] }
+banish = { version = "1.4.0", features = ["trace-logger"] }
 ```
  
 Call it once at the start of `main`. Pass `Some("file path")` to write output to a file, or pass `None` to print to stderr:

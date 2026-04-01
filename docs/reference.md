@@ -16,7 +16,8 @@ This document is the full technical reference for Banish. For a quick introducti
 9. [BanishDispatch](#banishdispatch)
 10. [Function Attributes](#function-attributes)
 11. [Examples](#examples)
-12. [Known Limitations](#known-limitations)
+12. [`no_std` Support](#no_std-support)
+13. [Known Limitations](#known-limitations)
 
 ---
 
@@ -121,6 +122,24 @@ A fallback branch runs when the rule's condition is `false`. Unlike the rule bod
         => @check; // Explicit re-entry needed here
     }
 ```
+
+### Pattern Conditions
+
+```
+name ? let Pat = expr { body }
+name ? let Pat = expr { body } !? { else_body }
+```
+
+A pattern condition uses `if let` semantics. The rule fires when the pattern matches, binding any captured variables into the rule body. If the pattern does not match the rule is skipped silently or, if a fallback branch is present, the fallback runs instead.
+
+```rust
+@drain
+    pop ? let Some(val) = queue.pop() {
+        sum += val;
+    } !? { return sum; }
+```
+
+Any irrefutable-ish pattern valid in `if let` is valid here: `Some(x)`, `Ok(val)`, tuple structs, `(a, b)`, and so on. Because the match result cannot be coerced to `bool`, `trace` diagnostics for pattern rules are emitted inside each branch rather than before the check.
 
 **Rule ordering matters.** Rules are evaluated top to bottom on every pass. A rule earlier in the list can change state that affects whether a later rule fires. Design rule order accordingly.
 
@@ -381,7 +400,7 @@ The simplest way to enable trace output is `banish::init_trace`, available behin
  
 ```toml
 [dependencies]
-banish = { version = "1.x", features = ["trace-logger"] }
+banish = { version = "1.4.0", features = ["trace-logger"] }
 ```
  
 Call it once at the start of `main`. Pass `Some("file path")` to write output to a file, or pass `None` to print to stderr:
@@ -1130,6 +1149,23 @@ fn main() {
 `@rejected` is isolated, so it is never entered by the implicit scheduler. It can only be reached via the explicit `=> @rejected` transition in `route?`.
  
 The four calls in `main` exercise every dispatch entry point and both exit paths. `@finalize` for success and `@rejected` for the invalid order.
+
+---
+
+## `no_std` Support
+
+Banish is `no_std` compatible. The core crate declares `#![no_std]` and has no dependency on the standard library at compile time.
+
+The one exception is the `trace-logger` feature. It pulls in [`env_logger`](https://docs.rs/env_logger), which requires `std` for file I/O and environment variable access. If you are targeting a `no_std` environment, simply omit this feature:
+
+```toml
+[dependencies]
+banish = "1.4.0"  # no features = no std dependency
+```
+
+Everything else, the `banish!` macro, `BanishDispatch`, state attributes, dispatch, async, and tracing via the `log` facade, works in `no_std` environments. The `log` crate itself is `no_std` compatible and will forward diagnostics to whatever backend is registered.
+
+**Bring your own backend:** in `no_std` contexts you are responsible for registering a `log`-compatible backend that works on your target. Banish emits all trace diagnostics through `log::trace!` and has no opinion about where they go.
 
 ---
 
