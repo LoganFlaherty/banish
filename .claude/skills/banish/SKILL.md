@@ -12,7 +12,7 @@ state advancement at compile time.
 
 ```toml
 [dependencies]
-banish = "1.3.1"
+banish = "1.4.0"
 ```
 
 ---
@@ -44,6 +44,10 @@ banish! {
         // Conditional rule with fallback (fallback does NOT re-evaluate)
         name ? condition { body } !? { else_body }
 
+        // Pattern condition fires when the pattern matches (if let semantics)
+        name ? let Pat = expr { body }
+        name ? let Pat = expr { body } !? { else_body }
+
         // Conditionless rule (fires exactly once per entry, on first pass)
         name? { body }
 
@@ -72,6 +76,7 @@ enter state
 - A rule "fires" when its condition is `true`. Firing sets `__interaction = true`.
 - `!?` fallback branches do **not** set `__interaction` — they never cause re-evaluation.
 - Conditionless rules (`name? { }`) fire once per entry (first pass only).
+- Pattern conditions (`name ? let Pat = expr { }`) use `if let` semantics. The rule fires when the pattern matches, binding variables into the body.
 - Rule order matters: earlier rules can change state that affects later rules.
 
 ---
@@ -99,7 +104,7 @@ enter state
 ```
 
 Transitions inside a rule body act immediately. They do not need to be the last
-statement — code after a taken guarded transition is unreachable.
+statement. Code after a taken guarded transition is unreachable.
 
 ---
 
@@ -123,12 +128,12 @@ let result: String = banish! {
 ## State Attributes
 
 ```rust
-#[isolate]                          // removed from scheduler; explicit transition only
-#[max_iter = N]                     // cap fixed-point loop; advance normally on exhaustion
-#[max_iter = N => @state]           // cap fixed-point loop; transition on exhaustion
-#[max_entry = N]                    // return on (N+1)th entry
-#[max_entry = N => @state]          // transition on (N+1)th entry
-#[trace]                            // emit log::trace! diagnostics (needs log backend)
+#[isolate] // removed from scheduler; explicit transition only
+#[max_iter = N] // cap fixed-point loop; advance normally on exhaustion
+#[max_iter = N => @state] // cap fixed-point loop; transition on exhaustion
+#[max_entry = N] // return on (N+1)th entry
+#[max_entry = N => @state] // transition on (N+1)th entry
+#[trace] // emit log::trace! diagnostics (needs log backend)
 ```
 
 Multiple attributes are comma-separated on one line:
@@ -170,10 +175,10 @@ banish! {
 Or use the function attribute to avoid manual wiring:
 
 ```rust
-#[banish::machine]   // must be outermost — before #[tokio::main]
+#[banish::machine] // must be outermost — before #[tokio::main]
 #[tokio::main]
 async fn main() {
-    banish! { ... }  // async + .await injected automatically; id = "main"
+    banish! { ... } // async + .await injected automatically; id = "main"
 }
 ```
 
@@ -189,7 +194,7 @@ enum Stage { Validate, Process, Finalize }
 
 fn run(order: Order, resume: Stage) -> Result {
     banish! {
-        #![dispatch(resume)]   // entry state determined at runtime
+        #![dispatch(resume)] // entry state determined at runtime
 
         @validate   ...
         @process    ...
@@ -210,7 +215,7 @@ state **panics at runtime**.
 ## Tracing
 
 ```toml
-banish = { version = "1.3.1", features = ["trace-logger"] }
+banish = { version = "1.4.0", features = ["trace-logger"] }
 ```
 
 ```rust
@@ -238,7 +243,7 @@ loop, to avoid unbounded recursion:
 @b  attack? { ... }
 ```
 
-**One-shot setup per state entry** — conditionless rules run once, then never again
+**One-shot setup per state entry**: conditionless rules run once, then never again
 until the state is re-entered:
 
 ```rust
@@ -247,18 +252,28 @@ until the state is re-entered:
     process ? data.is_some() { ... }
 ```
 
-**Fallback as else-branch that needs a loop** — fallbacks do not re-evaluate; use an
+**Fallback as else-branch that needs a loop**: fallbacks do not re-evaluate; use an
 explicit transition if re-evaluation is needed after the else branch:
 
 ```rust
 valid ? x > 0 { use(x); } !? { x = default; => @reset; }
 ```
 
-**Rule order is evaluation order** — if rule A mutates a value rule B checks, put A
+**Rule order is evaluation order**: if rule A mutates a value rule B checks, put A
 before B to make B see the updated value in the same pass.
 
-**State-level `let` resets every entry** — don't store cross-entry state there; use
+**Pattern conditions bind into the rule body**: use `name ? let Pat = expr { }` to
+match and destructure in one step. Combine with `!?` to handle the non-matching case:
+
+```rust
+@drain
+    pop ? let Some(val) = queue.pop() {
+        process(val);
+    } !? { return result; }
+```
+
+**State-level `let` resets every entry**: don't store cross-entry state there; use
 block-level variables instead.
 
-**`#[banish::machine]` must be the outermost attribute** — it runs first and transforms
+**`#[banish::machine]` must be the outermost attribute**: it runs first and transforms
 the function before any runtime macro (e.g. `#[tokio::main]`) sees it.
