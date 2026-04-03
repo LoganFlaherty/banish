@@ -3,7 +3,7 @@
 [![Docs.rs](https://docs.rs/banish/badge.svg)](https://docs.rs/banish)
 [![License](https://img.shields.io/crates/l/banish.svg)](https://github.com/LoganFlaherty/banish/blob/main/LICENSE)
 
-Banish is a declarative framework for rule-based state machines in Rust. Declare states and rules, and the framework handles scheduling, fixed-point evaluation, and transitions. You write the **what**, not the **how**.
+Banish is a declarative framework for rule-based state machines in Rust. Define states and rules, and Banish deterministically resolves scheduling and transitions, delivering complex state management with zero runtime overhead.
 
 ```rust
 use banish::banish;
@@ -13,10 +13,10 @@ fn main() {
     banish! {
         let mut ticks: i32 = 0;
 
-        // State attribute that triggers a return on the third entry
+        // State attribute that limits state entries
         #[max_entry = 2]
         @red // State declaration
-            // Conditionless rule that runs once per state entry. Ignores iterations
+            // Conditionless rule that runs once while in red
             announce? {
                 ticks = 0;
                 println!("\nRed light");
@@ -131,33 +131,14 @@ cargo add banish
 ```
 
 ## Concepts
-
-**States** (`@name`) group related rules. The machine starts at the first declared non-isolated state and advances through them in order.
-
-**Rules** (`name ? condition { body }`) fire when their condition is true. After firing, the state re-evaluates from the top. Once a full pass completes with no rules firing, the state has reached its fixed point and the machine advances.
-
-**Pattern conditions** (`name ? let Pat = expr { body }`) use `if let` semantics. The rule fires when the pattern matches, binding variables into the rule body. Useful for consuming iterators, popping queues, or matching enum variants:
-
-```rust
-@drain
-    pop ? let Some(val) = queue.pop() {
-        sum += val;
-    } !? { return sum; }
-```
-
-**Variables** (`let`) can be declared at block level before the first state, living for the entire machine lifetime, or at state level before the first rule, re-initializing on every entry to that state.
-
-**Fallback branches** (`!? { body }`) run when the preceding rule's condition is false. Does not trigger re-evaluation on its own.
-
-**Conditionless rules** (`name ? { body }`) fire exactly once on the first pass of each state entry.
-
-**Explicit transitions** (`=> @state;`) jump to any named state immediately, bypassing the implicit scheduler.
-
-**Guarded transitions** (`=> @state if condition;`) jump to the named state only when the condition is true. If false, execution continues normally in the rule body.
-
-**Return values** (`return expr;`) exit the entire `banish!` block with a value. The block can be assigned to a variable or used as a function's return expression.
-
-**Early exit** (`break;` / `continue;`) work natively inside rule bodies. `break` exits the current state and lets the scheduler advance normally. `continue` restarts rule evaluation from the top immediately.
+* **States** (`@name`) group related rules. Banish evaluates states sequentially by default.
+* **Rules** (`name ? condition { body }`) are the logic inside a state. Rules fire when their condition evaluates to true, triggering the state to re-evaluate from the top.
+* **Pattern conditions** (`name ? let Pat = expr { body }`) use `if let` semantics. The rule fires when the pattern matches, binding variables into the rule body.
+* **Variables** (`let`) can be declared at block level or at state level, which re-initialize on every entry.
+* **Fallback branches** (`!? { body }`) run when the preceding rule's condition is false. Does not trigger re-evaluation on its own.
+* **Conditionless rules** (`name ? { body }`) fire exactly once on the first pass of each state entry.
+* **Transitions** use `=> @state` for explicit jumps or `=> @state if condition;` for guarded jumps that bypass the implicit scheduler.
+* **Control flow** use `return expr;` to exit the entire machine block, `break;` to exit the current state, and `continue;` to force an immediate re-evaluation of the rules.
 
 ## State Attributes
 
@@ -282,7 +263,8 @@ If you need full control over log routing or filtering, skip `init_trace` and in
 * The [Record Normalizer](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#record-normalizer) example is an async multi-pass normalization pipeline that demonstrates `#[banish::machine]` and an isolated error state. Records are loaded from a file asynchronously, normalized in place, and written back out. If the load fails, an isolated `@error` state handles the failure and exits cleanly.
 * The [Order Processing Pipeline](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md#order-processing-pipeline) example is a resumable order processing pipeline that demonstrates `#![dispatch(...)]`, `BanishDispatch`, state-level variables, guarded transitions, and conditionless rules. Orders can be resumed from any stage by dispatching into the pipeline with the appropriate `OrderStage` variant.
 
-For a full treatment of every feature, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
+## Reference
+For a deeper dive, see the [Reference](https://github.com/LoganFlaherty/banish/blob/main/docs/reference.md).
 
 ## Contributing
 
