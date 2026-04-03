@@ -12,7 +12,7 @@ state advancement at compile time.
 
 ```toml
 [dependencies]
-banish = "1.4.0"
+banish = "1.4.1"
 ```
 
 ---
