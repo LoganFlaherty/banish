@@ -139,7 +139,7 @@ A pattern condition uses `if let` semantics. The rule fires when the pattern mat
     } !? { return sum; }
 ```
 
-Any irrefutable-ish pattern valid in `if let` is valid here: `Some(x)`, `Ok(val)`, tuple structs, `(a, b)`, and so on. Because the match result cannot be coerced to `bool`, `trace` diagnostics for pattern rules are emitted inside each branch rather than before the check.
+Any refutable pattern valid in `if let` is valid here: `Some(x)`, `Ok(val)`, tuple structs, `(a, b)`, and so on. Because the match result cannot be coerced to `bool`, `trace` diagnostics for pattern rules are emitted inside each branch rather than before the check.
 
 **Rule ordering matters.** Rules are evaluated top to bottom on every pass. A rule earlier in the list can change state that affects whether a later rule fires. Design rule order accordingly.
 
@@ -784,7 +784,7 @@ After `attack?` fires and `check_win` or `check_loss` has been evaluated, if nei
 
 ### Async HTTP Fetch
 
-An async workflow that demonstrates `#![async, id = ""]`, `.await`, `#[trace]`, and returning a tuple value from an async block. Pokemon data is fetched from the `pokeapi` and loaded into stucts to be accessed.
+An async workflow that demonstrates `#![async, id = ""]`, `.await`, `#[trace]`, and returning a tuple value from an async block. Pokemon data is fetched from the `pokeapi` and loaded into structs to be accessed.
 
 ```toml
 [dependencies]
