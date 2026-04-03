@@ -9,7 +9,7 @@ readme = "README.md"
 keywords = ["state-machine", "framework", "declarative", "no_std", "proc_macro"]
 
 [dependencies]
-banish_derive = "1.4.0"
+banish_derive = "1.4.1"
 log = "0.4.29"
 
 [dependencies.env_logger]
