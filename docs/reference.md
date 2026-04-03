@@ -400,7 +400,7 @@ The simplest way to enable trace output is `banish::init_trace`, available behin
  
 ```toml
 [dependencies]
-banish = { version = "1.4.0", features = ["trace-logger"] }
+banish = { version = "1.4.1", features = ["trace-logger"] }
 ```
  
 Call it once at the start of `main`. Pass `Some("file path")` to write output to a file, or pass `None` to print to stderr:
@@ -1160,7 +1160,7 @@ The one exception is the `trace-logger` feature. It pulls in [`env_logger`](http
 
 ```toml
 [dependencies]
-banish = "1.4.0"  # no features = no std dependency
+banish = "1.4.1"  # no features = no std dependency
 ```
 
 Everything else, the `banish!` macro, `BanishDispatch`, state attributes, dispatch, async, and tracing via the `log` facade, works in `no_std` environments. The `log` crate itself is `no_std` compatible and will forward diagnostics to whatever backend is registered.

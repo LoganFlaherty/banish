@@ -121,7 +121,7 @@ The manual version requires you to declare the enum, wire up the entry counter, 
 
 ```toml
 [dependencies]
-banish = "1.4.0"
+banish = "1.4.1"
 ```
 
 Or with cargo:
@@ -241,7 +241,7 @@ The `trace` attribute emits diagnostics through the [`log`](https://docs.rs/log)
  
 ```toml
 [dependencies]
-banish = { version = "1.4.0", features = ["trace-logger"] }
+banish = { version = "1.4.1", features = ["trace-logger"] }
 ```
  
 Call it once at the start of `main`. Pass `Some("file path")` to write output to a file, or pass `None` to print to stderr:
