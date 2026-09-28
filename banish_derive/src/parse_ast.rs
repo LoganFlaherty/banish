@@ -83,7 +83,19 @@ pub struct StateAttrs {
     pub trace: bool,
 }
 
+/// Parsed attributes that can be placed on a rule with `#[...]`.
+///
+/// * `max_entry = N` limits how many times this rule is considered. Each time
+///   the rule is reached counts, before its condition. After `N` considerations
+///   the rule is skipped and the other rules in the state still run. The
+///   counter persists for the lifetime of the `banish!` block.
+#[derive(Default)]
+pub struct RuleAttrs {
+    pub max_entry: Option<usize>,
+}
+
 pub struct Rule {
+    pub attrs: RuleAttrs,
     pub name: Ident,
     pub condition: Option<RuleCondition>,
     pub body: Vec<BanishStmt>,
@@ -160,9 +172,10 @@ impl Parse for State {
             vars.push(input.parse()?);
         }
 
-        // Parse rules until the next state (or its attribute block) or end of input
+        // Parse rules until the next state. `#[...]` before `@name` starts that
+        // state. `#[...]` before a rule name is a rule attribute and stays here.
         let mut rules: Vec<Rule> = Vec::with_capacity(1);
-        while !input.is_empty() && !input.peek(Token![@]) && !input.peek(Token![#]) {
+        while !input.is_empty() && !next_item_is_state(input)? {
             rules.push(input.parse()?);
         }
 
@@ -172,6 +185,18 @@ impl Parse for State {
 
 impl Parse for Rule {
     fn parse(input: ParseStream) -> Result<Self> {
+        let attrs: RuleAttrs = if input.peek(Token![#]) && !input.peek2(Token![!]) {
+            input.parse::<Token![#]>()?;
+            let content: syn::parse::ParseBuffer<'_>;
+            bracketed!(content in input);
+            parse_rule_attrs(&content)?
+        } else { RuleAttrs::default() };
+
+        // A second `#[...]` belongs to this rule. `#[...] @name` is the next state.
+        if input.peek(Token![#]) && !next_item_is_state(input)? {
+            return Err(input.error("A rule may only have one rule attribute block `#[...]`"));
+        }
+
         let name: Ident = input.parse()?;
 
         input.parse::<Token![?]>()?;
@@ -194,7 +219,7 @@ impl Parse for Rule {
             ));
         }
 
-        Ok(Rule { name, condition, body, fallback_body })
+        Ok(Rule { attrs, name, condition, body, fallback_body })
     }
 }
 
@@ -346,6 +371,75 @@ fn parse_state_attrs(content: &syn::parse::ParseBuffer) -> Result<StateAttrs> {
         }
 
         // Consume optional trailing comma between attributes.
+        if !content.is_empty() {
+            content.parse::<Token![,]>()?;
+        }
+    }
+
+    Ok(attrs)
+}
+
+/// `true` when the next tokens are a state: `@name` or `#[...] @name`.
+fn next_item_is_state(input: ParseStream) -> Result<bool> {
+    if input.peek(Token![@]) {
+        return Ok(true);
+    }
+    // `#![...]` is a block attribute, not a state.
+    if !input.peek(Token![#]) || input.peek2(Token![!]) {
+        return Ok(false);
+    }
+
+    let ahead = input.fork();
+    ahead.parse::<Token![#]>()?;
+    let content: syn::parse::ParseBuffer<'_>;
+    bracketed!(content in ahead);
+    Ok(ahead.peek(Token![@]))
+}
+
+/// Parse the comma-separated list of attributes inside a rule's `#[...]`.
+fn parse_rule_attrs(content: &syn::parse::ParseBuffer) -> Result<RuleAttrs> {
+    let mut attrs: RuleAttrs = RuleAttrs::default();
+
+    while !content.is_empty() {
+        let key: Ident = content.parse()?;
+        match key.to_string().as_str() {
+            "max_entry" => {
+                if attrs.max_entry.is_some() {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "Duplicate rule attribute `max_entry`. Remove the duplicate",
+                    ));
+                }
+                content.parse::<Token![=]>()?;
+                let lit: LitInt = content.parse()?;
+                let val: usize = lit.base10_parse::<usize>().map_err(|_| {
+                    syn::Error::new(lit.span(), "Rule attribute `max_entry` must be greater than zero")
+                })?;
+                if val == 0 {
+                    return Err(syn::Error::new(
+                        lit.span(),
+                        "Rule attribute `max_entry` must be greater than zero",
+                    ));
+                }
+                if content.peek(Token![=>]) {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "Rule attribute `max_entry` does not support a redirect",
+                    ));
+                }
+                attrs.max_entry = Some(val);
+            }
+            other => {
+                return Err(syn::Error::new(
+                    key.span(),
+                    format!(
+                        "Unknown rule attribute `{}`. Expected attribute(s): `max_entry`",
+                        other
+                    ),
+                ));
+            }
+        }
+
         if !content.is_empty() {
             content.parse::<Token![,]>()?;
         }
