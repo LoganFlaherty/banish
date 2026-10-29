@@ -10,6 +10,14 @@ pub fn entry_counter_ident(index: usize) -> syn::Ident {
     )
 }
 
+/// Returns a stable identifier for the `max_entry` counter of one rule.
+pub fn rule_entry_counter_ident(state_index: usize, rule_index: usize) -> syn::Ident {
+    syn::Ident::new(
+        &format!("__rule_entry_count_{}_{}", state_index, rule_index),
+        proc_macro2::Span::call_site(),
+    )
+}
+
 pub fn generate_state(state: &State, input: &Block, index: usize,
     isolated_indices: &[usize]) -> proc_macro2::TokenStream {
     let attrs: &crate::parse_ast::StateAttrs = &state.attrs;
@@ -24,7 +32,7 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
         None => "[banish]".to_string(),
     };
 
-    let rules = state.rules.iter().map(|func: &crate::parse_ast::Rule| {
+    let rules = state.rules.iter().enumerate().map(|(rule_index, func): (usize, &crate::parse_ast::Rule)| {
         let rule_name: String = func.name.to_string();
         let body = func.body.iter().map(|stmt: &BanishStmt| generate_stmt(stmt, input));
         let fallback_body = func.fallback_body.as_ref().map(|eb: &Vec<BanishStmt>| {
@@ -149,7 +157,19 @@ pub fn generate_state(state: &State, input: &Block, index: usize,
             }
         };
 
-        rule_body
+        // Count every time this rule is reached, before its condition. After
+        // `N` considerations, skip only this rule.
+        if let Some(max) = func.attrs.max_entry {
+            let counter: syn::Ident = rule_entry_counter_ident(index, rule_index);
+            quote! {
+                if #counter < #max {
+                    #counter += 1;
+                    #rule_body
+                }
+            }
+        } else {
+            rule_body
+        }
     });
 
     // Build the body of the inner loop.

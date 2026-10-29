@@ -21,7 +21,7 @@ use validate::{
     validate_final_state_has_exit, validate_isolated_states,
     validate_no_break_in_final_state
 };
-use codegen::{ entry_counter_ident, generate_state };
+use codegen::{ entry_counter_ident, generate_state, rule_entry_counter_ident };
 use machine::machine_handler;
 
 /// Expands a banish block into a labeled `match` loop at compile time.
@@ -64,6 +64,19 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             state.attrs.max_entry.as_ref().map(|_| {
                 let ident: syn::Ident = entry_counter_ident(i);
                 quote! { let mut #ident: usize = 0; }
+            })
+        })
+        .collect();
+
+    // Per-rule persistent counters for rule `max_entry` (also outside the main loop).
+    let rule_entry_counters: Vec<proc_macro2::TokenStream> = input.states.iter()
+        .enumerate()
+        .flat_map(|(state_index, state)| {
+            state.rules.iter().enumerate().filter_map(move |(rule_index, rule)| {
+                rule.attrs.max_entry.map(|_| {
+                    let ident: syn::Ident = rule_entry_counter_ident(state_index, rule_index);
+                    quote! { let mut #ident: usize = 0; }
+                })
             })
         })
         .collect();
@@ -113,6 +126,7 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 #current_state_init
                 let mut __interaction: bool = false;
                 #(#entry_counters)*
+                #(#rule_entry_counters)*
                 'banish_main: loop {
                     match __current_state {
                         #(#state_blocks)*
@@ -128,6 +142,7 @@ pub fn banish(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 #current_state_init
                 let mut __interaction: bool = false;
                 #(#entry_counters)*
+                #(#rule_entry_counters)*
                 'banish_main: loop {
                     match __current_state {
                         #(#state_blocks)*
